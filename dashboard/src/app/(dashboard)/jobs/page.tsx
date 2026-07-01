@@ -225,15 +225,42 @@ export default function JobsPage() {
       const d = devices.find(x => x.deviceId === tab.targetDeviceId);
       label = d?.name || d?.machineName || tab.targetDeviceId;
 
-      // Run scheduler on single node to get a proper report
-      schedulerDecision = runScheduler(
+      // Run scheduler on all nodes in the cluster or pool to get comparison details
+      const poolDeviceIds = tab.targetClusterId
+        ? clusters.find(c => c.id === tab.targetClusterId)?.deviceIds
+        : undefined;
+
+      const fullDecision = runScheduler(
         devices,
         metricsMap,
-        [tab.targetDeviceId],
+        poolDeviceIds,
         schedulerWeights
       );
-      if (!schedulerDecision) {
-        // Build a minimal decision if node is offline/unhealthy
+
+      if (fullDecision) {
+        const selectedNode = fullDecision.rankedNodes.find(n => n.deviceId === tab.targetDeviceId) 
+          || fullDecision.eliminatedNodes.find(n => n.deviceId === tab.targetDeviceId);
+        
+        // Move the selected node to the front of rankedNodes if it is not eliminated
+        let newRanked = [...fullDecision.rankedNodes];
+        if (selectedNode && !selectedNode.eliminated) {
+          newRanked = [
+            selectedNode,
+            ...fullDecision.rankedNodes.filter(n => n.deviceId !== tab.targetDeviceId)
+          ];
+        }
+
+        schedulerDecision = {
+          ...fullDecision,
+          selectedDeviceId: tab.targetDeviceId,
+          selectedDeviceName: label,
+          finalScore: selectedNode ? selectedNode.finalScore : 0,
+          rankedNodes: newRanked,
+          routingReason: `Manual dedicated routing. User explicitly selected node: ${label}.`,
+          positiveFacts: ['User manually selected this node for dedicated execution.'],
+        };
+      } else {
+        // Build a minimal decision if no nodes are evaluated at all
         schedulerDecision = {
           timestamp: Date.now(),
           selectedDeviceId: tab.targetDeviceId,
@@ -302,7 +329,13 @@ export default function JobsPage() {
         tiebroken: false,
         weights: schedulerWeights,
         rankedNodes: [],
-        eliminatedNodes: [],
+        eliminatedNodes: devices.map(d => ({
+          deviceId: d.deviceId,
+          deviceName: d.name || d.machineName,
+          cpuUsage: 0, ramUsage: 0, gpuUsage: 0, cpuTemp: 0, gpuTemp: 0, latencyMs: 0, runningTasks: 0, waitingTasks: 0, diskUsage: 0, successRate: 80, batteryPercent: null, powerPluggedIn: null, uptimeHours: 0, diskReadMbps: 0, diskWriteMbps: 0, downloadMbps: 0, uploadMbps: 0,
+          cpuScore: 0, ramScore: 0, gpuScore: 0, temperatureScore: 0, networkScore: 0, queueScore: 0, reliabilityScore: 0, diskScore: 0, finalScore: 0, averagePerformance: 0,
+          status: 'offline', healthStatus: 'critical', eliminated: true, eliminationReason: 'Node is offline'
+        })),
       };
 
       const jobId = await createJob({

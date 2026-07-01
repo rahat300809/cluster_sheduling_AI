@@ -810,15 +810,15 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
             {activeTab === 'overview' && (
               <div className="space-y-4">
                 {/* AI Overview Performance Table */}
-                <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-5 overflow-hidden">
+                <div className="rounded-xl border border-slate-700 bg-slate-900/90 p-5 overflow-hidden shadow-2xl">
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
                     <div>
-                      <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <BarChart2 className="w-4 h-4" /> PC Performance Comparison Matrix
+                      <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                        <BarChart2 className="w-4 h-4 text-emerald-400" /> PC Performance Comparison Matrix
                       </h3>
-                      <p className="text-[10px] text-slate-500 mt-0.5">Real-time metrics, normalized factor scores, arithmetic average performance (equal weights), and weighted scheduler composite final score.</p>
+                      <p className="text-[10px] text-slate-300 mt-0.5">Real-time metrics, normalized factor scores, arithmetic average performance (equal weights), and weighted scheduler composite final score.</p>
                     </div>
-                    <div className="text-[10px] text-slate-400 bg-slate-900/60 px-3 py-1.5 rounded-lg border border-slate-800 font-mono self-start md:self-auto">
+                    <div className="text-[10px] text-slate-200 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-700 font-mono self-start md:self-auto">
                       Formula: Avg Score = (CPU + RAM + GPU + Temp + Net + Queue + Rel. + Disk) / 8
                     </div>
                   </div>
@@ -826,7 +826,7 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                   <div className="overflow-x-auto -mx-5 px-5">
                     <table className="w-full text-left text-xs border-collapse min-w-[800px]">
                       <thead>
-                        <tr className="border-b border-slate-800 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                        <tr className="border-b-2 border-slate-600 text-slate-100 text-[10px] font-extrabold uppercase tracking-wider bg-slate-950/70">
                           <th className="py-3 px-3">PC Node</th>
                           <th className="py-3 px-2">CPU</th>
                           <th className="py-3 px-2">RAM</th>
@@ -838,7 +838,7 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                           <th className="py-3 px-3 text-right">Selection</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-900/60">
+                      <tbody className="divide-y divide-slate-800/80 bg-slate-900/40">
                         {[...decision.rankedNodes, ...decision.eliminatedNodes].map((node) => {
                           const isWinner = node.deviceId === decision.selectedDeviceId;
                           const isElim = node.eliminated;
@@ -847,120 +847,120 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                           return (
                             <tr 
                               key={node.deviceId}
-                              className={`transition-colors hover:bg-slate-900/40 ${
+                              className={`transition-colors hover:bg-slate-800/80 ${
                                 isWinner 
-                                  ? 'bg-emerald-500/5 text-emerald-100' 
+                                  ? 'bg-emerald-950/40 text-white font-semibold' 
                                   : isElim 
-                                    ? 'bg-red-500/5 text-red-300' 
-                                    : 'text-slate-300'
+                                    ? 'bg-red-950/20 text-red-200' 
+                                    : 'text-slate-100'
                               }`}
                             >
                               {/* PC Node */}
-                              <td className="py-3 px-3">
+                              <td className="py-3 px-3 border-b border-slate-800">
                                 <div className="flex items-center gap-2.5">
                                   {isWinner ? (
-                                    <div className="w-5 h-5 rounded-full bg-emerald-500/20 flex items-center justify-center">
-                                      <Trophy className="w-3 h-3 text-emerald-400" />
+                                    <div className="w-5 h-5 rounded-full bg-emerald-500/30 flex items-center justify-center border border-emerald-400">
+                                      <Trophy className="w-3 h-3 text-emerald-300" />
                                     </div>
                                   ) : isElim ? (
-                                    <div className="w-5 h-5 rounded-full bg-red-500/20 flex items-center justify-center">
-                                      <XCircle className="w-3 h-3 text-red-500" />
+                                    <div className="w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center border border-red-400">
+                                      <XCircle className="w-3 h-3 text-red-400" />
                                     </div>
                                   ) : (
-                                    <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                                    <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-300 border border-slate-700">
                                       C
                                     </div>
                                   )}
                                   <div>
-                                    <span className="font-bold text-xs block">{node.deviceName}</span>
-                                    <span className="text-[9px] text-slate-500 font-mono tracking-tighter truncate max-w-[150px] block">{node.deviceId}</span>
+                                    <span className="font-bold text-xs block text-slate-50">{node.deviceName}</span>
+                                    <span className="text-[9px] text-slate-400 font-mono tracking-tighter truncate max-w-[150px] block">{node.deviceId}</span>
                                   </div>
                                 </div>
                               </td>
 
                               {/* CPU */}
-                              <td className="py-3 px-2">
+                              <td className="py-3 px-2 border-b border-slate-800">
                                 <div className="font-mono">
-                                  <span className="font-semibold block">{node.cpuUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-500">{node.cpuTemp.toFixed(0)}°C</span>
-                                  <span className="block text-[9px] text-emerald-400/80 font-semibold">Score: {node.cpuScore.toFixed(0)}</span>
+                                  <span className="font-bold text-slate-50 block">{node.cpuUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-300">{node.cpuTemp.toFixed(0)}°C</span>
+                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.cpuScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* RAM */}
-                              <td className="py-3 px-2">
+                              <td className="py-3 px-2 border-b border-slate-800">
                                 <div className="font-mono">
-                                  <span className="font-semibold block">{node.ramUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-500">Uptime: {node.uptimeHours.toFixed(1)}h</span>
-                                  <span className="block text-[9px] text-emerald-400/80 font-semibold">Score: {node.ramScore.toFixed(0)}</span>
+                                  <span className="font-bold text-slate-50 block">{node.ramUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-300">Uptime: {node.uptimeHours.toFixed(1)}h</span>
+                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.ramScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* GPU */}
-                              <td className="py-3 px-2">
+                              <td className="py-3 px-2 border-b border-slate-800">
                                 <div className="font-mono">
-                                  <span className="font-semibold block">{node.gpuUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-500">{node.gpuTemp.toFixed(0)}°C</span>
-                                  <span className="block text-[9px] text-emerald-400/80 font-semibold">Score: {node.gpuScore.toFixed(0)}</span>
+                                  <span className="font-bold text-slate-50 block">{node.gpuUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-300">{node.gpuTemp.toFixed(0)}°C</span>
+                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.gpuScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* SSD/Disk */}
-                              <td className="py-3 px-2">
+                              <td className="py-3 px-2 border-b border-slate-800">
                                 <div className="font-mono">
-                                  <span className="font-semibold block">{node.diskUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-500">{(node.diskReadMbps + node.diskWriteMbps).toFixed(0)} MB/s</span>
-                                  <span className="block text-[9px] text-emerald-400/80 font-semibold">Score: {node.diskScore.toFixed(0)}</span>
+                                  <span className="font-bold text-slate-50 block">{node.diskUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-300">{(node.diskReadMbps + node.diskWriteMbps).toFixed(0)} MB/s</span>
+                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.diskScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* Network */}
-                              <td className="py-3 px-2">
+                              <td className="py-3 px-2 border-b border-slate-800">
                                 <div className="font-mono">
-                                  <span className="font-semibold block">{node.latencyMs.toFixed(0)}ms</span>
-                                  <span className="block text-[9px] text-slate-500">{node.downloadMbps.toFixed(0)} Mbps</span>
-                                  <span className="block text-[9px] text-emerald-400/80 font-semibold">Score: {node.networkScore.toFixed(0)}</span>
+                                  <span className="font-bold text-slate-50 block">{node.latencyMs.toFixed(0)}ms</span>
+                                  <span className="block text-[9px] text-slate-300">{node.downloadMbps.toFixed(0)} Mbps</span>
+                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.networkScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* Avg Perf */}
-                              <td className="py-3 px-2 text-center">
+                              <td className="py-3 px-2 text-center border-b border-slate-800">
                                 <span className={`inline-block font-mono font-black px-2.5 py-1 rounded text-xs ${
                                   isWinner 
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' 
+                                    ? 'bg-emerald-500 text-slate-950 shadow-[0_0_8px_rgba(52,211,153,0.4)]' 
                                     : isElim 
-                                      ? 'bg-red-500/10 text-red-400' 
-                                      : 'bg-slate-900 text-blue-300 border border-slate-800'
+                                      ? 'bg-red-950 text-red-400 border border-red-900' 
+                                      : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
                                 }`}>
                                   {isElim ? '—' : `${avgPerf.toFixed(1)}`}
                                 </span>
                               </td>
 
                               {/* Final Score */}
-                              <td className="py-3 px-2 text-center">
+                              <td className="py-3 px-2 text-center border-b border-slate-800">
                                 <span className={`inline-block font-mono font-black px-2.5 py-1 rounded text-xs ${
                                   isWinner 
-                                    ? 'bg-emerald-500/25 border border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.15)]' 
+                                    ? 'bg-emerald-500/35 border border-emerald-400 text-emerald-200 shadow-[0_0_8px_rgba(52,211,153,0.2)]' 
                                     : isElim 
-                                      ? 'bg-red-500/10 text-red-400' 
-                                      : 'bg-slate-800 text-slate-200 border border-slate-700/60'
+                                      ? 'bg-red-950/20 text-red-400 border border-red-900/60' 
+                                      : 'bg-slate-800 text-white border border-slate-700'
                                 }`}>
                                   {isElim ? '—' : `${node.finalScore.toFixed(1)}`}
                                 </span>
                               </td>
 
                               {/* Selection/Status */}
-                              <td className="py-3 px-3 text-right">
+                              <td className="py-3 px-3 text-right border-b border-slate-800">
                                 {isWinner ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-500/25 text-emerald-400 border border-emerald-500/40 shadow-[0_0_8px_rgba(52,211,153,0.1)]">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-500 text-slate-950 border border-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.3)]">
                                     ✓ SELECTED BEST
                                   </span>
                                 ) : isElim ? (
-                                  <span className="inline-block text-[9px] text-red-400 font-semibold bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded" title={node.eliminationReason}>
+                                  <span className="inline-block text-[9px] text-red-300 font-semibold bg-red-950 border border-red-800/80 px-2 py-0.5 rounded" title={node.eliminationReason}>
                                     ELIMINATED
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-semibold bg-slate-900/60 text-slate-400 border border-slate-800">
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
                                     EVALUATED
                                   </span>
                                 )}
