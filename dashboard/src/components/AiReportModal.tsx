@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { SchedulerDecision, NodeScoreBreakdown } from '@/types';
 import type { AIAnalysisReport } from '@/lib/groqAnalysis';
+import { buildFallbackAnalysis } from '@/lib/groqAnalysis';
 import { useAppStore } from '@/store/appStore';
 import { runScheduler } from '@/lib/scheduler';
 
@@ -675,23 +676,23 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
           return {
             deviceId: d.deviceId,
             deviceName: d.name || d.machineName,
-            cpuUsage: m?.cpu.total ?? 0,
-            ramUsage: m?.ram.usedPercent ?? 0,
-            gpuUsage: m?.gpu.usagePercent ?? 0,
-            cpuTemp: m?.temperatures.cpu ?? 0,
-            gpuTemp: m?.temperatures.gpu ?? 0,
-            latencyMs: m?.network.latencyMs ?? 0,
+            cpuUsage: m?.cpu?.total ?? 0,
+            ramUsage: m?.ram?.usedPercent ?? 0,
+            gpuUsage: m?.gpu?.usagePercent ?? 0,
+            cpuTemp: m?.temperatures?.cpu ?? 0,
+            gpuTemp: m?.temperatures?.gpu ?? 0,
+            latencyMs: m?.network?.latencyMs ?? 0,
             runningTasks: m?.runningTasks ?? 0,
             waitingTasks: m?.waitingTasks ?? 0,
-            diskUsage: m?.disk.usedPercent ?? 0,
+            diskUsage: m?.disk?.usedPercent ?? 0,
             successRate: m?.successRate ?? 80,
             batteryPercent: m?.batteryPercent ?? null,
             powerPluggedIn: m?.powerPluggedIn ?? null,
             uptimeHours: (m?.uptimeSeconds ?? 0) / 3600,
-            diskReadMbps: m?.disk.readMbps ?? 0,
-            diskWriteMbps: m?.disk.writeMbps ?? 0,
-            downloadMbps: m?.network.downloadMbps ?? 0,
-            uploadMbps: m?.network.uploadMbps ?? 0,
+            diskReadMbps: m?.disk?.readMbps ?? 0,
+            diskWriteMbps: m?.disk?.writeMbps ?? 0,
+            downloadMbps: m?.network?.downloadMbps ?? 0,
+            uploadMbps: m?.network?.uploadMbps ?? 0,
             cpuScore: 0, ramScore: 0, gpuScore: 0, temperatureScore: 0, networkScore: 0, queueScore: 0, reliabilityScore: 0, diskScore: 0, finalScore: 0, averagePerformance: 0,
             status: m?.status ?? 'offline', healthStatus: m?.healthStatus ?? 'critical', eliminated: true, eliminationReason: 'Node is offline'
           };
@@ -701,26 +702,18 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
     return rawDecision;
   })();
 
-  const [aiReport, setAiReport]       = useState<AIAnalysisReport | null>(null);
-  const [aiLoading, setAiLoading]     = useState(true);
-  const [aiError, setAiError]         = useState<string | null>(null);
   const [pdfLoading, setPdfLoading]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'overview' | 'nodes' | 'config'>('overview');
 
   const winner   = decision.rankedNodes[0];
   const runnerUp = decision.rankedNodes[1];
 
-  // ── Fetch Groq AI Analysis on mount ──────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    setAiLoading(true);
-    setAiError(null);
-
-    // Build SchedulerDecision in the shape groqAnalysis expects
+  // Instantly generate mathematical rule-based analysis report locally without Groq API calls
+  const aiReport = (() => {
     const decisionForAI = {
       ...decision,
       decisionId:    String(decision.timestamp),
-      selectedNode:  { ...winner, hostname: winner?.deviceName ?? 'Unknown', nodeId: winner?.deviceId ?? '' },
+      selectedNode:  winner ? { ...winner, hostname: winner.deviceName ?? 'Unknown', nodeId: winner.deviceId ?? '' } : null,
       allScores:     decision.rankedNodes.map(n => ({
         ...n,
         nodeId:   n.deviceId,
@@ -763,24 +756,11 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
       tiebreakerUsed: decision.tiebroken ? decision.tiebreakMethod : null,
     };
 
-    import('@/lib/groqAnalysis').then(({ generateAIAnalysis }) => {
-      generateAIAnalysis(decisionForAI as any)
-        .then(report => {
-          if (!cancelled) {
-            setAiReport(report);
-            setAiLoading(false);
-          }
-        })
-        .catch(err => {
-          if (!cancelled) {
-            setAiError(String(err));
-            setAiLoading(false);
-          }
-        });
-    });
+    return buildFallbackAnalysis(decisionForAI as any);
+  })();
 
-    return () => { cancelled = true; };
-  }, [decision.timestamp, decision.selectedDeviceId]);
+  const aiLoading = false;
+  const aiError = null;
 
   const handlePDFExport = useCallback(async () => {
     setPdfLoading(true);
@@ -803,21 +783,21 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <motion.div
-          initial={{ scale: 0.93, opacity: 0, y: 20 }}
-          animate={{ scale: 1, opacity: 1, y: 0 }}
-          exit={{ scale: 0.95, opacity: 0, y: 10 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 28 }}
-          className="relative w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden rounded-2xl border"
-          style={{ background: 'linear-gradient(135deg,#080d1a 0%,#0a1628 100%)', borderColor: 'rgba(52,211,153,0.2)' }}
+          initial={{ opacity: 0, y: 15 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 15 }}
+          transition={{ type: 'spring', stiffness: 350, damping: 30 }}
+          className="relative w-screen h-screen flex flex-col overflow-hidden"
+          style={{ background: 'linear-gradient(135deg,#080d1a 0%,#0a1628 100%)' }}
         >
           {/* Header */}
           <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'rgba(52,211,153,0.15)', background: 'rgba(15,30,65,0.8)' }}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <Sparkles className="w-4 h-4 text-emerald-400" />
+                <BarChart2 className="w-4 h-4 text-emerald-400" />
               </div>
               <div>
-                <h2 className="font-bold text-white text-sm">AI Scheduling Report</h2>
+                <h2 className="font-bold text-white text-sm">Scheduler Decision & Node Comparison Matrix</h2>
                 <p className="text-xs text-slate-400">{jobName} · {format(new Date(decision.timestamp), 'MMM d, yyyy HH:mm:ss')}</p>
               </div>
             </div>
@@ -849,9 +829,9 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
           {/* Tabs */}
           <div className="flex border-b px-6" style={{ borderColor: 'rgba(52,211,153,0.1)' }}>
             {([
-              { id: 'overview', label: 'AI Overview', icon: Sparkles },
-              { id: 'nodes',    label: 'Node Comparison', icon: BarChart2 },
-              { id: 'config',   label: 'Weights & Config', icon: Activity },
+              { id: 'overview', label: 'Comparison Overview', icon: BarChart2 },
+              { id: 'nodes',    label: 'Score Breakdowns', icon: Activity },
+              { id: 'config',   label: 'Weights & Config', icon: ListTodo },
             ] as const).map(tab => (
               <button
                 key={tab.id}

@@ -147,7 +147,21 @@ export async function generateAIAnalysis(decision: AnyDecision): Promise<AIAnaly
 
 // ─── Fallback Rule-Based Analysis ─────────────────────────────────────────────
 
-function buildFallbackAnalysis(decision: AnyDecision, latencyMs: number): AIAnalysisReport {
+export function buildFallbackAnalysis(decision: AnyDecision, latencyMs = 0): AIAnalysisReport {
+  if (!decision || !decision.selectedNode || !decision.allScores || decision.allScores.length === 0) {
+    return {
+      executiveSummary: 'Preparing PC comparison matrix and loading data...',
+      selectionRationale: 'Loading scheduler breakdown details...',
+      performanceInsights: '',
+      riskAssessment: '',
+      recommendations: [],
+      comparisonNarrative: '',
+      technicianNotes: '',
+      generatedBy: 'fallback',
+      latencyMs: 0,
+    };
+  }
+
   const winner   = decision.selectedNode;
   const allValid = decision.allScores.filter((n: any) => !decision.eliminatedNodes?.find((e: any) => e.nodeId === n.nodeId));
   const runnerUp = allValid.find((n: any) => n.rank === 2);
