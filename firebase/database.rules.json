@@ -1,0 +1,38 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "devices": {
+      "$deviceId": {
+        "metrics": {
+          ".read": "auth != null",
+          ".write": true
+        },
+        "processes": {
+          ".read": "auth != null",
+          ".write": true
+        },
+        "pendingCommands": {
+          ".read": true,
+          ".write": true
+        },
+        "commandResults": {
+          ".read": "auth != null",
+          ".write": true
+        },
+        "jobOutput": {
+          ".read": "auth != null",
+          ".write": true
+        }
+      }
+    },
+
+    "pairCodes": {
+      "$pairCode": {
+        ".read": true,
+        ".write": true
+      }
+    }
+  }
+}
