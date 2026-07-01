@@ -11,6 +11,8 @@ import {
 } from 'lucide-react';
 import type { SchedulerDecision, NodeScoreBreakdown } from '@/types';
 import type { AIAnalysisReport } from '@/lib/groqAnalysis';
+import { useAppStore } from '@/store/appStore';
+import { runScheduler } from '@/lib/scheduler';
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 
@@ -305,30 +307,33 @@ async function exportToPDF(
     startY: 25,
     head: [[
       'Rank', 'Node', 'CPU%', 'RAM%', 'GPU%',
-      'CPU°C', 'Latency', 'Tasks',
-      'Disk%', 'Avg Perf', 'Final Score', 'Status'
+      'Ping', 'Tasks', 'Avg Perf', 'Score', 'Decision & Reason'
     ]],
     body: allNodes.map((n, i) => {
       const rank = n.eliminated ? 'ELIM' : `#${decision.rankedNodes.findIndex(r => r.deviceId === n.deviceId) + 1}`;
+      const reason = n.eliminated
+        ? (n.eliminationReason ?? 'Node is offline')
+        : (n.deviceId === decision.selectedDeviceId
+            ? 'SELECTED WINNER ✓'
+            : (n.eliminationReason ?? 'Lower Score')
+          );
       return [
         rank,
         (n.deviceName || n.deviceId.slice(0, 8)).slice(0, 16),
         `${(n.cpuUsage ?? 0).toFixed(0)}%`,
         `${(n.ramUsage ?? 0).toFixed(0)}%`,
         `${(n.gpuUsage ?? 0).toFixed(0)}%`,
-        `${(n.cpuTemp  ?? 0).toFixed(0)}C`,
         `${(n.latencyMs ?? 0).toFixed(0)}ms`,
         `${n.runningTasks ?? 0}/${n.waitingTasks ?? 0}`,
-        `${(n.diskUsage  ?? 0).toFixed(0)}%`,
         n.eliminated ? '—' : (n.averagePerformance ?? 0).toFixed(1),
         n.eliminated ? '—' : (n.finalScore ?? 0).toFixed(1),
-        n.eliminated ? 'ELIMINATED' : (n.deviceId === decision.selectedDeviceId ? 'SELECTED ✓' : 'Evaluated'),
+        reason
       ];
     }),
     theme: 'plain',
     styles: {
-      fontSize: 6.5,
-      cellPadding: { top: 2.2, right: 2, bottom: 2.2, left: 2 },
+      fontSize: 6,
+      cellPadding: { top: 2.2, right: 1.5, bottom: 2.2, left: 1.5 },
       textColor: [220, 230, 245],
       lineColor: [30, 50, 90],
       lineWidth: 0.25,
@@ -337,22 +342,34 @@ async function exportToPDF(
       fillColor: C.navy,
       textColor: C.accent,
       fontStyle: 'bold',
-      fontSize: 6.5,
+      fontSize: 6,
+    },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 20 },
+      2: { cellWidth: 12, halign: 'center' },
+      3: { cellWidth: 12, halign: 'center' },
+      4: { cellWidth: 12, halign: 'center' },
+      5: { cellWidth: 12, halign: 'center' },
+      6: { cellWidth: 12, halign: 'center' },
+      7: { cellWidth: 15, halign: 'center', fontStyle: 'bold', textColor: C.blue },
+      8: { cellWidth: 15, halign: 'center', fontStyle: 'bold', textColor: C.accent },
+      9: { cellWidth: 70 },
     },
     alternateRowStyles: { fillColor: C.rowB },
     bodyStyles: { fillColor: C.rowA },
     didParseCell: (data: any) => {
-      // Highlight winner row
       const rowNode = allNodes[data.row.index];
       if (rowNode?.deviceId === decision.selectedDeviceId) {
         data.cell.styles.fillColor = [15, 60, 40];
         data.cell.styles.textColor = C.accent;
-        data.cell.styles.fontStyle = 'bold';
+        if (data.column.index === 9) {
+          data.cell.styles.fontStyle = 'bold';
+        }
       }
-      // Red for eliminated
       if (rowNode?.eliminated) {
-        data.cell.styles.textColor = [239, 68, 68];
-        data.cell.styles.fillColor = [40, 15, 15];
+        data.cell.styles.textColor = [252, 165, 165];
+        data.cell.styles.fillColor = [45, 15, 15];
       }
     },
     margin: { left: 10, right: 10 },
@@ -599,24 +616,90 @@ function exportToCSV(decision: SchedulerDecision, jobName: string) {
 // ─── Main Modal ───────────────────────────────────────────────────────────────
 
 export default function AiReportModal({ decision: inputDecision, jobName = 'Unnamed Job', jobId, onClose }: AiReportModalProps) {
-  const decision: SchedulerDecision = {
-    timestamp: inputDecision?.timestamp ?? Date.now(),
-    selectedDeviceId: inputDecision?.selectedDeviceId ?? '',
-    selectedDeviceName: inputDecision?.selectedDeviceName ?? 'Unknown Device',
-    finalScore: inputDecision?.finalScore ?? 0,
-    rank: inputDecision?.rank ?? 1,
-    totalConsidered: inputDecision?.totalConsidered ?? 1,
-    confidence: inputDecision?.confidence ?? 100,
-    routingReason: inputDecision?.routingReason ?? 'No details available.',
-    positiveFacts: inputDecision?.positiveFacts ?? [],
-    tiebroken: inputDecision?.tiebroken ?? false,
-    weights: inputDecision?.weights ?? {
-      cpu: 0.3, ram: 0.2, gpu: 0.1, temperature: 0.1, network: 0.1, queue: 0.1, reliability: 0.05, disk: 0.05
-    },
-    rankedNodes: Array.isArray(inputDecision?.rankedNodes) ? inputDecision.rankedNodes : [],
-    eliminatedNodes: Array.isArray(inputDecision?.eliminatedNodes) ? inputDecision.eliminatedNodes : [],
-    expectedCompletionMinutes: inputDecision?.expectedCompletionMinutes ?? 0,
-  };
+  const { devices, metricsMap } = useAppStore();
+
+  const decision: SchedulerDecision = (() => {
+    const rawDecision: SchedulerDecision = {
+      timestamp: inputDecision?.timestamp ?? Date.now(),
+      selectedDeviceId: inputDecision?.selectedDeviceId ?? '',
+      selectedDeviceName: inputDecision?.selectedDeviceName ?? 'Unknown Device',
+      finalScore: inputDecision?.finalScore ?? 0,
+      rank: inputDecision?.rank ?? 1,
+      totalConsidered: inputDecision?.totalConsidered ?? 1,
+      confidence: inputDecision?.confidence ?? 100,
+      routingReason: inputDecision?.routingReason ?? 'No details available.',
+      positiveFacts: inputDecision?.positiveFacts ?? [],
+      tiebroken: inputDecision?.tiebroken ?? false,
+      weights: inputDecision?.weights ?? {
+        cpu: 0.3, ram: 0.2, gpu: 0.1, temperature: 0.1, network: 0.1, queue: 0.1, reliability: 0.05, disk: 0.05
+      },
+      rankedNodes: Array.isArray(inputDecision?.rankedNodes) ? inputDecision.rankedNodes : [],
+      eliminatedNodes: Array.isArray(inputDecision?.eliminatedNodes) ? inputDecision.eliminatedNodes : [],
+      expectedCompletionMinutes: inputDecision?.expectedCompletionMinutes ?? 0,
+    };
+
+    if (rawDecision.rankedNodes.length === 0 && rawDecision.eliminatedNodes.length === 0 && devices.length > 0) {
+      // Reconstruct dynamic scheduler details using the weights & target of this decision
+      const reconstructed = runScheduler(
+        devices,
+        metricsMap,
+        undefined,
+        rawDecision.weights
+      );
+
+      if (reconstructed) {
+        const targetId = rawDecision.selectedDeviceId || reconstructed.selectedDeviceId;
+        const selectedNode = reconstructed.rankedNodes.find(n => n.deviceId === targetId) 
+          || reconstructed.eliminatedNodes.find(n => n.deviceId === targetId);
+
+        let newRanked = [...reconstructed.rankedNodes];
+        if (selectedNode && !selectedNode.eliminated) {
+          newRanked = [
+            selectedNode,
+            ...reconstructed.rankedNodes.filter(n => n.deviceId !== targetId)
+          ];
+        }
+
+        return {
+          ...reconstructed,
+          selectedDeviceId: targetId,
+          selectedDeviceName: selectedNode?.deviceName ?? rawDecision.selectedDeviceName,
+          finalScore: selectedNode?.finalScore ?? 0,
+          rankedNodes: newRanked,
+          timestamp: rawDecision.timestamp,
+        };
+      } else {
+        // Fallback populating from current devices as eliminated (offline)
+        rawDecision.eliminatedNodes = devices.map(d => {
+          const m = metricsMap[d.deviceId];
+          return {
+            deviceId: d.deviceId,
+            deviceName: d.name || d.machineName,
+            cpuUsage: m?.cpu.total ?? 0,
+            ramUsage: m?.ram.usedPercent ?? 0,
+            gpuUsage: m?.gpu.usagePercent ?? 0,
+            cpuTemp: m?.temperatures.cpu ?? 0,
+            gpuTemp: m?.temperatures.gpu ?? 0,
+            latencyMs: m?.network.latencyMs ?? 0,
+            runningTasks: m?.runningTasks ?? 0,
+            waitingTasks: m?.waitingTasks ?? 0,
+            diskUsage: m?.disk.usedPercent ?? 0,
+            successRate: m?.successRate ?? 80,
+            batteryPercent: m?.batteryPercent ?? null,
+            powerPluggedIn: m?.powerPluggedIn ?? null,
+            uptimeHours: (m?.uptimeSeconds ?? 0) / 3600,
+            diskReadMbps: m?.disk.readMbps ?? 0,
+            diskWriteMbps: m?.disk.writeMbps ?? 0,
+            downloadMbps: m?.network.downloadMbps ?? 0,
+            uploadMbps: m?.network.uploadMbps ?? 0,
+            cpuScore: 0, ramScore: 0, gpuScore: 0, temperatureScore: 0, networkScore: 0, queueScore: 0, reliabilityScore: 0, diskScore: 0, finalScore: 0, averagePerformance: 0,
+            status: m?.status ?? 'offline', healthStatus: m?.healthStatus ?? 'critical', eliminated: true, eliminationReason: 'Node is offline'
+          };
+        });
+      }
+    }
+    return rawDecision;
+  })();
 
   const [aiReport, setAiReport]       = useState<AIAnalysisReport | null>(null);
   const [aiLoading, setAiLoading]     = useState(true);
@@ -697,7 +780,7 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
     });
 
     return () => { cancelled = true; };
-  }, [decision]);
+  }, [decision.timestamp, decision.selectedDeviceId]);
 
   const handlePDFExport = useCallback(async () => {
     setPdfLoading(true);
@@ -872,8 +955,18 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                                     </div>
                                   )}
                                   <div>
-                                    <span className="font-bold text-xs block text-slate-50">{node.deviceName}</span>
+                                    <div className="flex items-center gap-1.5">
+                                      <span className="font-bold text-xs block text-slate-50">{node.deviceName}</span>
+                                      {isWinner && (
+                                        <span className="bg-emerald-500/20 text-emerald-400 text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase">Winner</span>
+                                      )}
+                                    </div>
                                     <span className="text-[9px] text-slate-400 font-mono tracking-tighter truncate max-w-[150px] block">{node.deviceId}</span>
+                                    {!isWinner && node.eliminationReason && (
+                                      <span className={`block text-[9px] mt-0.5 font-medium ${isElim ? 'text-red-400 font-bold' : 'text-amber-400/90'}`} style={{ maxWidth: '220px' }}>
+                                        {isElim ? '✗ Eliminated: ' : '⚠ Rejected: '}{node.eliminationReason}
+                                      </span>
+                                    )}
                                   </div>
                                 </div>
                               </td>
