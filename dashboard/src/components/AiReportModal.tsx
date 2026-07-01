@@ -94,28 +94,30 @@ async function exportToPDF(
 
   const winner    = decision.rankedNodes[0];
   const timestamp = format(new Date(decision.timestamp), 'yyyy-MM-dd HH:mm:ss');
-  const filename  = `ClusterOS_AI_Report_${jobName.replace(/\s+/g, '_')}_${format(new Date(decision.timestamp), 'yyyyMMdd_HHmmss')}.pdf`;
+  const filename  = `ClusterOS_Report_${jobName.replace(/\s+/g, '_')}_${format(new Date(decision.timestamp), 'yyyyMMdd_HHmmss')}.pdf`;
 
   const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const W   = pdf.internal.pageSize.getWidth();
   const H   = pdf.internal.pageSize.getHeight();
 
-  // ── Palette ───────────────────────────────────────────────────────────────
+  // ── Palette (Clean High-Contrast White Background) ─────────────────────────
   const C = {
-    bg:       [10, 15, 26]    as [number,number,number],
-    navyDark: [13, 20, 40]    as [number,number,number],
-    navy:     [15, 30, 65]    as [number,number,number],
-    accent:   [52, 211, 153]  as [number,number,number],  // emerald
-    accentDim:[20, 83, 60]    as [number,number,number],
-    blue:     [99, 179, 237]  as [number,number,number],
-    white:    [255,255,255]   as [number,number,number],
-    dim:      [148,163,184]   as [number,number,number],
-    muted:    [71, 85, 105]   as [number,number,number],
-    red:      [239, 68, 68]   as [number,number,number],
-    amber:    [245,158, 11]   as [number,number,number],
-    rowA:     [15, 23, 42]    as [number,number,number],
-    rowB:     [20, 30, 55]    as [number,number,number],
-    border:   [30, 50, 90]    as [number,number,number],
+    bg:          [255, 255, 255] as [number,number,number], // white
+    surface:     [248, 250, 252] as [number,number,number], // slate-50
+    cardBorder:  [226, 232, 240] as [number,number,number], // slate-200
+    textMain:    [15, 23, 42]    as [number,number,number], // slate-900
+    textSub:     [71, 85, 105]   as [number,number,number], // slate-600
+    textMuted:   [148, 163, 184] as [number,number,number], // slate-400
+    accent:      [5, 150, 105]   as [number,number,number], // emerald-600
+    accentLight: [209, 250, 229] as [number,number,number], // emerald-100
+    blue:        [29, 78, 216]   as [number,number,number], // blue-700
+    blueLight:   [219, 234, 254] as [number,number,number], // blue-100
+    red:         [185, 28, 28]   as [number,number,number], // red-700
+    redLight:    [254, 226, 226] as [number,number,number], // red-100
+    amber:       [180, 83, 9]    as [number,number,number], // amber-700
+    rowA:        [255, 255, 255] as [number,number,number],
+    rowB:        [248, 250, 252] as [number,number,number],
+    border:      [226, 232, 240] as [number,number,number],
   };
 
   let pageNum = 1;
@@ -123,82 +125,79 @@ async function exportToPDF(
   function addPageBg() {
     pdf.setFillColor(...C.bg);
     pdf.rect(0, 0, W, H, 'F');
-    // Subtle top gradient strip
-    pdf.setFillColor(...C.navy);
-    pdf.rect(0, 0, W, 18, 'F');
+    // Elegant thin line at the top
+    pdf.setFillColor(...C.textMain);
+    pdf.rect(0, 0, W, 1.5, 'F');
   }
 
   function addFooter() {
     pdf.setFontSize(7);
-    pdf.setTextColor(...C.muted);
-    const total = (pdf as any).getNumberOfPages?.() ?? pageNum;
+    pdf.setTextColor(...C.textSub);
     pdf.text(
-      `ClusterOS Intelligent Scheduler  ·  Confidential  ·  Generated ${timestamp}  ·  Page ${pageNum}`,
+      `ClusterOS Scheduler Dispatch Report  ·  Confidential  ·  Generated ${timestamp}  ·  Page ${pageNum}`,
       W / 2, H - 6, { align: 'center' }
     );
     pageNum++;
   }
 
   function addSectionHeader(label: string, y: number): number {
-    pdf.setFillColor(...C.navy);
-    pdf.roundedRect(10, y, W - 20, 7, 1, 1, 'F');
+    pdf.setFillColor(...C.surface);
+    pdf.setDrawColor(...C.border);
+    pdf.setLineWidth(0.2);
+    pdf.roundedRect(10, y, W - 20, 7, 0.5, 0.5, 'FD');
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...C.accent);
+    pdf.setTextColor(...C.textMain);
     pdf.text(`▶  ${label.toUpperCase()}`, 14, y + 4.8);
     return y + 10;
   }
 
   // ════════════════════════════════════════════════════════════
-  // PAGE 1 — Header + Executive Summary + Routing Reason
+  // PAGE 1 — Header + Summary Cards + Rationale & Overview
   // ════════════════════════════════════════════════════════════
   addPageBg();
-
-  // Header bar
-  pdf.setFillColor(...C.navy);
-  pdf.rect(0, 0, W, 20, 'F');
 
   // Logo / Title
   pdf.setFontSize(14);
   pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(...C.accent);
+  pdf.setTextColor(...C.textMain);
   pdf.text('ClusterOS', 12, 12);
   pdf.setFontSize(9);
-  pdf.setTextColor(...C.white);
-  pdf.text('Intelligent Scheduler — AI Analysis Report', 42, 12);
+  pdf.setTextColor(...C.accent);
+  pdf.text('Intelligent Scheduler — Performance & Dispatch Report', 42, 12);
 
   // Timestamp right-aligned
   pdf.setFontSize(7.5);
   pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(...C.dim);
+  pdf.setTextColor(...C.textSub);
   pdf.text(timestamp, W - 12, 12, { align: 'right' });
 
   // Job name sub-line
   pdf.setFontSize(8);
-  pdf.setTextColor(...C.dim);
-  pdf.text(`Job: ${jobName}   ·   Decision ID: ${decision.timestamp}`, 12, 17);
+  pdf.setTextColor(...C.textSub);
+  pdf.text(`Job: ${jobName}   ·   Scheduler Run ID: ${decision.timestamp}`, 12, 17);
 
   let y = 26;
 
   // ── SUMMARY CARDS ────────────────────────────────────────────────────────
   const cardW  = (W - 30) / 4;
   const cards = [
-    { label: 'SELECTED NODE', value: winner?.deviceName ?? '—', sub: `Score: ${decision.finalScore.toFixed(2)}/100` },
-    { label: 'CONFIDENCE',    value: `${decision.confidence}%`,  sub: decision.tiebroken ? `Tiebreaker: ${decision.tiebreakMethod}` : 'Direct selection' },
-    { label: 'NODES EVALUATED', value: `${decision.totalConsidered + decision.eliminatedNodes.length}`,  sub: `${decision.eliminatedNodes.length} eliminated` },
+    { label: 'SELECTED PC', value: winner?.deviceName ?? '—', sub: `Score: ${decision.finalScore.toFixed(2)}/100` },
+    { label: 'CONFIDENCE',   value: `${decision.confidence}%`, sub: decision.tiebroken ? `Tiebreaker: ${decision.tiebreakMethod}` : 'Direct selection' },
+    { label: 'NODES EVALUATED', value: `${decision.totalConsidered + decision.eliminatedNodes.length}`, sub: `${decision.eliminatedNodes.length} eliminated` },
     { label: 'EST. COMPLETION', value: `~${decision.expectedCompletionMinutes ?? 5} min`, sub: `${winner?.runningTasks ?? 0} tasks running` },
   ];
 
   cards.forEach((card, i) => {
     const cx = 10 + i * (cardW + 2.5);
-    pdf.setFillColor(...C.navyDark);
+    pdf.setFillColor(...C.surface);
     pdf.setDrawColor(...C.border);
     pdf.setLineWidth(0.3);
-    pdf.roundedRect(cx, y, cardW, 20, 1.5, 1.5, 'FD');
+    pdf.roundedRect(cx, y, cardW, 20, 1, 1, 'FD');
 
     pdf.setFontSize(6.5);
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...C.dim);
+    pdf.setTextColor(...C.textSub);
     pdf.text(card.label, cx + cardW / 2, y + 5.5, { align: 'center' });
 
     pdf.setFontSize(11);
@@ -209,32 +208,25 @@ async function exportToPDF(
 
     pdf.setFontSize(6.5);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...C.muted);
+    pdf.setTextColor(...C.textSub);
     pdf.text(card.sub, cx + cardW / 2, y + 18, { align: 'center' });
   });
   y += 24;
 
-  // ── AI NARRATIVE SECTIONS ──────────────────────────────────────────────
+  // ── ANALYSIS NARRATIVE SECTIONS ──────────────────────────────────────────
   if (aiReport) {
     y = addSectionHeader('Executive Summary', y);
     pdf.setFontSize(8.5);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...C.white);
+    pdf.setTextColor(...C.textMain);
     const summaryLines = pdf.splitTextToSize(aiReport.executiveSummary, W - 24);
     pdf.text(summaryLines, 14, y);
     y += summaryLines.length * 4.5 + 4;
 
-    if (aiReport.generatedBy === 'groq') {
-      pdf.setFontSize(6.5);
-      pdf.setTextColor(...C.accent);
-      pdf.text(`✦ AI-powered analysis by ${aiReport.modelUsed} · Generated in ${aiReport.latencyMs}ms`, 14, y);
-      y += 6;
-    }
-
-    y = addSectionHeader('Selection Rationale', y);
+    y = addSectionHeader('Selection Rationale & Mathematical Reasoning', y);
     pdf.setFontSize(8.5);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...C.white);
+    pdf.setTextColor(...C.textMain);
     const rationaleLines = pdf.splitTextToSize(aiReport.selectionRationale, W - 24);
     pdf.text(rationaleLines, 14, y);
     y += rationaleLines.length * 4.5 + 4;
@@ -242,28 +234,27 @@ async function exportToPDF(
     y = addSectionHeader('Risk Assessment', y);
     pdf.setFontSize(8.5);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...C.white);
+    pdf.setTextColor(...C.textMain);
     const riskLines = pdf.splitTextToSize(aiReport.riskAssessment, W - 24);
     pdf.text(riskLines, 14, y);
     y += riskLines.length * 4.5 + 4;
   } else {
-    // Routing reason fallback
-    y = addSectionHeader('Routing Decision', y);
+    y = addSectionHeader('Routing Decision & Selection Reasoning', y);
     pdf.setFontSize(8.5);
     pdf.setFont('helvetica', 'normal');
-    pdf.setTextColor(...C.white);
+    pdf.setTextColor(...C.textMain);
     const routingLines = pdf.splitTextToSize(decision.routingReason, W - 24);
     pdf.text(routingLines, 14, y);
     y += routingLines.length * 4.5 + 4;
   }
 
-  // ── POSITIVE FACTS ──────────────────────────────────────────────────────
-  y = addSectionHeader('Contributing Factors (Winner Selection)', y);
-  decision.positiveFacts.forEach((fact, i) => {
+  // ── POSITIVE CONTRIBUTING FACTORS ────────────────────────────────────────
+  y = addSectionHeader('Contributing Performance Factors (Winner Selection)', y);
+  decision.positiveFacts.forEach((fact) => {
     pdf.setFontSize(8);
     pdf.setTextColor(...C.accent);
     pdf.text('✓', 15, y);
-    pdf.setTextColor(...C.white);
+    pdf.setTextColor(...C.textMain);
     pdf.text(fact, 21, y);
     y += 5;
   });
@@ -271,13 +262,13 @@ async function exportToPDF(
 
   // ── RECOMMENDATIONS ──────────────────────────────────────────────────────
   if (aiReport?.recommendations?.length) {
-    if (y > H - 50) { pdf.addPage(); addPageBg(); y = 26; }
-    y = addSectionHeader('AI Recommendations', y);
+    if (y > H - 55) { pdf.addPage(); addPageBg(); y = 26; }
+    y = addSectionHeader('Actionable System Recommendations', y);
     aiReport.recommendations.forEach((rec, i) => {
       pdf.setFontSize(8);
       pdf.setTextColor(...C.amber);
       pdf.text(`${i + 1}.`, 15, y);
-      pdf.setTextColor(...C.white);
+      pdf.setTextColor(...C.textMain);
       const recLines = pdf.splitTextToSize(rec, W - 30);
       pdf.text(recLines, 22, y);
       y += recLines.length * 4.5 + 2;
@@ -294,11 +285,11 @@ async function exportToPDF(
 
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(...C.accent);
-  pdf.text('Node Comparison — Full Metric Breakdown', 12, 14);
+  pdf.setTextColor(...C.textMain);
+  pdf.text('PC Performance Comparison Matrix', 12, 14);
   pdf.setFontSize(7.5);
   pdf.setFont('helvetica', 'normal');
-  pdf.setTextColor(...C.dim);
+  pdf.setTextColor(...C.textSub);
   pdf.text(`Scheduler Weights: CPU ${(decision.weights.cpu*100).toFixed(0)}%  RAM ${(decision.weights.ram*100).toFixed(0)}%  GPU ${(decision.weights.gpu*100).toFixed(0)}%  Temp ${(decision.weights.temperature*100).toFixed(0)}%  Net ${(decision.weights.network*100).toFixed(0)}%  Queue ${(decision.weights.queue*100).toFixed(0)}%  Reliability ${(decision.weights.reliability*100).toFixed(0)}%  Disk ${(decision.weights.disk*100).toFixed(0)}%`, 12, 20);
 
   // All scored nodes table
@@ -333,17 +324,17 @@ async function exportToPDF(
     }),
     theme: 'plain',
     styles: {
-      fontSize: 6,
-      cellPadding: { top: 2.2, right: 1.5, bottom: 2.2, left: 1.5 },
-      textColor: [220, 230, 245],
-      lineColor: [30, 50, 90],
+      fontSize: 6.5,
+      cellPadding: { top: 2.5, right: 2, bottom: 2.5, left: 2 },
+      textColor: C.textMain,
+      lineColor: C.border,
       lineWidth: 0.25,
     },
     headStyles: {
-      fillColor: C.navy,
-      textColor: C.accent,
+      fillColor: C.surface,
+      textColor: C.textMain,
       fontStyle: 'bold',
-      fontSize: 6,
+      fontSize: 6.5,
     },
     columnStyles: {
       0: { cellWidth: 10, halign: 'center' },
@@ -362,15 +353,13 @@ async function exportToPDF(
     didParseCell: (data: any) => {
       const rowNode = allNodes[data.row.index];
       if (rowNode?.deviceId === decision.selectedDeviceId) {
-        data.cell.styles.fillColor = [15, 60, 40];
+        data.cell.styles.fillColor = C.accentLight;
         data.cell.styles.textColor = C.accent;
-        if (data.column.index === 9) {
-          data.cell.styles.fontStyle = 'bold';
-        }
+        data.cell.styles.fontStyle = 'bold';
       }
       if (rowNode?.eliminated) {
-        data.cell.styles.textColor = [252, 165, 165];
-        data.cell.styles.fillColor = [45, 15, 15];
+        data.cell.styles.textColor = C.red;
+        data.cell.styles.fillColor = C.redLight;
       }
     },
     margin: { left: 10, right: 10 },
@@ -383,7 +372,7 @@ async function exportToPDF(
   if (yAfterTable < H - 60) {
     pdf.setFontSize(9);
     pdf.setFont('helvetica', 'bold');
-    pdf.setTextColor(...C.accent);
+    pdf.setTextColor(...C.textMain);
     pdf.text('Score Component Breakdown (Scored Nodes Only)', 12, yAfterTable);
     yAfterTable += 5;
 
@@ -406,14 +395,14 @@ async function exportToPDF(
       theme: 'plain',
       styles: {
         fontSize: 6.5,
-        cellPadding: { top: 2, right: 2, bottom: 2, left: 2 },
-        textColor: [220, 230, 245],
-        lineColor: [30, 50, 90],
+        cellPadding: { top: 2.2, right: 2, bottom: 2.2, left: 2 },
+        textColor: C.textMain,
+        lineColor: C.border,
         lineWidth: 0.25,
       },
       headStyles: {
-        fillColor: C.navy,
-        textColor: C.blue,
+        fillColor: C.surface,
+        textColor: C.textMain,
         fontStyle: 'bold',
         fontSize: 6.5,
       },
@@ -421,11 +410,10 @@ async function exportToPDF(
       bodyStyles: { fillColor: C.rowA },
       didParseCell: (data: any) => {
         if (decision.rankedNodes[data.row.index]?.deviceId === decision.selectedDeviceId) {
-          data.cell.styles.fillColor = [15, 60, 40];
+          data.cell.styles.fillColor = C.accentLight;
           data.cell.styles.textColor = C.accent;
           data.cell.styles.fontStyle = 'bold';
         }
-        // Highlight FINAL column
         if (data.column.index === 10) {
           data.cell.styles.fontStyle = 'bold';
         }
@@ -437,15 +425,15 @@ async function exportToPDF(
   addFooter();
 
   // ════════════════════════════════════════════════════════════
-  // PAGE 3 — Eliminated Nodes + Weights + Technician Notes
+  // PAGE 3 — Eliminated Nodes + System Weight Configuration
   // ════════════════════════════════════════════════════════════
   pdf.addPage();
   addPageBg();
 
   pdf.setFontSize(12);
   pdf.setFont('helvetica', 'bold');
-  pdf.setTextColor(...C.accent);
-  pdf.text('Eliminated Nodes & Configuration', 12, 14);
+  pdf.setTextColor(...C.textMain);
+  pdf.text('Eliminated Nodes & System Weight Configuration', 12, 14);
 
   let y3 = 22;
 
@@ -469,25 +457,25 @@ async function exportToPDF(
       styles: {
         fontSize: 7,
         cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 },
-        textColor: [239, 68, 68],
-        lineColor: [80, 20, 20],
+        textColor: C.red,
+        lineColor: C.border,
         lineWidth: 0.25,
       },
       headStyles: {
-        fillColor: [50, 15, 15],
-        textColor: [252, 165, 165],
+        fillColor: C.redLight,
+        textColor: C.red,
         fontStyle: 'bold',
         fontSize: 7,
       },
-      bodyStyles: { fillColor: [30, 10, 10] },
-      alternateRowStyles: { fillColor: [40, 12, 12] },
+      bodyStyles: { fillColor: C.rowA },
+      alternateRowStyles: { fillColor: C.rowB },
       margin: { left: 10, right: 10 },
     });
     y3 = ((pdf as any).lastAutoTable?.finalY as number | undefined) != null ? (pdf as any).lastAutoTable.finalY + 8 : y3 + 20;
   } else {
     pdf.setFontSize(8);
     pdf.setFont('helvetica', 'italic');
-    pdf.setTextColor(...C.dim);
+    pdf.setTextColor(...C.textSub);
     pdf.text('No nodes were eliminated — all discovered nodes passed health checks.', 14, y3);
     y3 += 10;
   }
@@ -514,20 +502,20 @@ async function exportToPDF(
     styles: {
       fontSize: 7.5,
       cellPadding: { top: 2.5, right: 2.5, bottom: 2.5, left: 2.5 },
-      textColor: [220, 230, 245],
+      textColor: C.textMain,
       lineColor: C.border,
       lineWidth: 0.25,
     },
     headStyles: {
-      fillColor: C.navy,
-      textColor: C.accent,
+      fillColor: C.surface,
+      textColor: C.textMain,
       fontStyle: 'bold',
       fontSize: 7.5,
     },
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 42 },
       1: { halign: 'center', cellWidth: 18, textColor: C.accent, fontStyle: 'bold' },
-      2: { textColor: C.dim },
+      2: { textColor: C.textSub },
     },
     alternateRowStyles: { fillColor: C.rowB },
     bodyStyles: { fillColor: C.rowA },
@@ -542,7 +530,7 @@ async function exportToPDF(
       y3 = addSectionHeader('Performance Insights', y3);
       pdf.setFontSize(8.5);
       pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(...C.white);
+      pdf.setTextColor(...C.textMain);
       const insightLines = pdf.splitTextToSize(aiReport.performanceInsights, W - 24);
       pdf.text(insightLines, 14, y3);
       y3 += insightLines.length * 4.5 + 4;
@@ -551,7 +539,7 @@ async function exportToPDF(
       y3 = addSectionHeader('Node Comparison Narrative', y3);
       pdf.setFontSize(8.5);
       pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(...C.white);
+      pdf.setTextColor(...C.textMain);
       const compLines = pdf.splitTextToSize(aiReport.comparisonNarrative, W - 24);
       pdf.text(compLines, 14, y3);
       y3 += compLines.length * 4.5 + 4;
@@ -560,7 +548,7 @@ async function exportToPDF(
       y3 = addSectionHeader('Technician Notes', y3);
       pdf.setFontSize(8.5);
       pdf.setFont('helvetica', 'normal');
-      pdf.setTextColor(...C.dim);
+      pdf.setTextColor(...C.textSub);
       const techLines = pdf.splitTextToSize(aiReport.technicianNotes, W - 24);
       pdf.text(techLines, 14, y3);
       y3 += techLines.length * 4.5 + 4;
