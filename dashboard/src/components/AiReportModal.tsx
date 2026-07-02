@@ -27,22 +27,22 @@ interface AiReportModalProps {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function scoreColor(score: number) {
-  if (score >= 80) return '#10b981'; // emerald
-  if (score >= 60) return '#f59e0b'; // amber
-  if (score >= 40) return '#f97316'; // orange
-  return '#ef4444'; // red
+  if (score >= 80) return '#06b6d4'; // Cyan
+  if (score >= 60) return '#a78bfa'; // Purple/Violet
+  if (score >= 40) return '#f59e0b'; // Amber
+  return '#f43f5e'; // Rose
 }
 function scoreClass(score: number) {
-  if (score >= 80) return 'text-emerald-400';
-  if (score >= 60) return 'text-amber-400';
-  if (score >= 40) return 'text-orange-400';
-  return 'text-red-400';
+  if (score >= 80) return 'text-cyan-400';
+  if (score >= 60) return 'text-purple-300';
+  if (score >= 40) return 'text-amber-400';
+  return 'text-rose-400';
 }
 function scoreBg(score: number) {
-  if (score >= 80) return 'bg-emerald-500/10 border-emerald-500/20';
-  if (score >= 60) return 'bg-amber-500/10 border-amber-500/20';
-  if (score >= 40) return 'bg-orange-500/10 border-orange-500/20';
-  return 'bg-red-500/10 border-red-500/20';
+  if (score >= 80) return 'bg-cyan-500/10 border-cyan-500/20';
+  if (score >= 60) return 'bg-purple-500/10 border-purple-500/20';
+  if (score >= 40) return 'bg-amber-500/10 border-amber-500/20';
+  return 'bg-rose-500/10 border-rose-500/20';
 }
 
 function ScoreBar({ value, label, icon: Icon }: { value: number; label: string; icon: React.ElementType }) {
@@ -108,12 +108,12 @@ async function exportToPDF(
     textMain:    [15, 23, 42]    as [number,number,number], // slate-900
     textSub:     [71, 85, 105]   as [number,number,number], // slate-600
     textMuted:   [148, 163, 184] as [number,number,number], // slate-400
-    accent:      [5, 150, 105]   as [number,number,number], // emerald-600
-    accentLight: [209, 250, 229] as [number,number,number], // emerald-100
-    blue:        [29, 78, 216]   as [number,number,number], // blue-700
-    blueLight:   [219, 234, 254] as [number,number,number], // blue-100
-    red:         [185, 28, 28]   as [number,number,number], // red-700
-    redLight:    [254, 226, 226] as [number,number,number], // red-100
+    accent:      [124, 58, 237]  as [number,number,number], // violet-600 (was emerald)
+    accentLight: [237, 233, 254] as [number,number,number], // violet-100
+    blue:        [8, 145, 178]   as [number,number,number], // cyan-600
+    blueLight:   [207, 250, 254] as [number,number,number], // cyan-100
+    red:         [225, 29, 72]   as [number,number,number], // rose-600
+    redLight:    [255, 228, 230] as [number,number,number], // rose-100
     amber:       [180, 83, 9]    as [number,number,number], // amber-700
     rowA:        [255, 255, 255] as [number,number,number],
     rowB:        [248, 250, 252] as [number,number,number],
@@ -690,14 +690,23 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
     return rawDecision;
   })();
 
+  // Instantly generate mathematical rule-based analysis report locally without Groq API calls
+  const [aiReport, setAiReport]       = useState<AIAnalysisReport | null>(null);
+  const [aiLoading, setAiLoading]     = useState(true);
+  const [aiError, setAiError]         = useState<string | null>(null);
   const [pdfLoading, setPdfLoading]   = useState(false);
   const [activeTab, setActiveTab]     = useState<'overview' | 'nodes' | 'config'>('overview');
 
   const winner   = decision.rankedNodes[0];
   const runnerUp = decision.rankedNodes[1];
 
-  // Instantly generate mathematical rule-based analysis report locally without Groq API calls
-  const aiReport = (() => {
+
+  // ── Fetch Groq AI Analysis on mount ──────────────────────────────────────
+  useEffect(() => {
+    let cancelled = false;
+    setAiLoading(true);
+    setAiError(null);
+
     const decisionForAI = {
       ...decision,
       decisionId:    String(decision.timestamp),
@@ -744,11 +753,24 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
       tiebreakerUsed: decision.tiebroken ? decision.tiebreakMethod : null,
     };
 
-    return buildFallbackAnalysis(decisionForAI as any);
-  })();
+    import('@/lib/groqAnalysis').then(({ generateAIAnalysis }) => {
+      generateAIAnalysis(decisionForAI as any)
+        .then(report => {
+          if (!cancelled) {
+            setAiReport(report);
+            setAiLoading(false);
+          }
+        })
+        .catch(err => {
+          if (!cancelled) {
+            setAiError(String(err));
+            setAiLoading(false);
+          }
+        });
+    });
 
-  const aiLoading = false;
-  const aiError = null;
+    return () => { cancelled = true; };
+  }, [decision.timestamp, decision.selectedDeviceId]);
 
   const handlePDFExport = useCallback(async () => {
     setPdfLoading(true);
@@ -771,88 +793,88 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
         onClick={(e) => e.target === e.currentTarget && onClose()}
       >
         <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 15 }}
-          transition={{ type: 'spring', stiffness: 350, damping: 30 }}
-          className="relative w-screen h-screen flex flex-col overflow-hidden"
-          style={{ background: 'linear-gradient(135deg,#080d1a 0%,#0a1628 100%)' }}
+          initial={{ scale: 0.95, opacity: 0, y: 15 }}
+          animate={{ scale: 1, opacity: 1, y: 0 }}
+          exit={{ scale: 0.96, opacity: 0, y: 8 }}
+          transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+          className="relative w-full max-w-[96vw] h-[94vh] flex flex-col overflow-hidden rounded-2xl border cyber-glass font-outfit"
+          style={{ background: 'linear-gradient(135deg,#020512 0%,#080c20 100%)', borderColor: 'rgba(139,92,246,0.3)' }}
         >
           {/* Header */}
-          <div className="flex items-center justify-between px-6 py-4 border-b" style={{ borderColor: 'rgba(52,211,153,0.15)', background: 'rgba(15,30,65,0.8)' }}>
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center">
-                <BarChart2 className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center justify-between px-8 py-5 border-b" style={{ borderColor: 'rgba(139,92,246,0.2)', background: 'rgba(7,10,30,0.85)' }}>
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-xl bg-violet-600/20 flex items-center justify-center border border-violet-500/30 glow-violet">
+                <Sparkles className="w-5 h-5 text-violet-400" />
               </div>
               <div>
-                <h2 className="font-bold text-white text-sm">Scheduler Decision & Node Comparison Matrix</h2>
-                <p className="text-xs text-slate-400">{jobName} · {format(new Date(decision.timestamp), 'MMM d, yyyy HH:mm:ss')}</p>
+                <h2 className="font-space font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-violet-400 via-indigo-200 to-cyan-300 text-lg uppercase tracking-wider">AI Workload Dispatch Report</h2>
+                <p className="text-xs text-slate-400 font-medium font-outfit">{jobName} · {format(new Date(decision.timestamp), 'MMM d, yyyy HH:mm:ss')}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               {/* Export CSV */}
               <button
                 onClick={() => exportToCSV(decision, jobName)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-300 bg-slate-800 hover:bg-slate-700 transition-colors border border-slate-700"
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-slate-300 bg-slate-900/80 hover:bg-slate-800 transition-all border border-slate-800 hover:border-slate-700 cursor-pointer"
               >
-                <FileText className="w-3.5 h-3.5" />
-                CSV
+                <FileText className="w-4 h-4 text-violet-400" />
+                CSV Export
               </button>
               {/* Export PDF */}
               <button
                 onClick={handlePDFExport}
                 disabled={pdfLoading}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white transition-all border"
-                style={{ background: pdfLoading ? 'rgba(52,211,153,0.2)' : 'rgba(52,211,153,0.25)', borderColor: 'rgba(52,211,153,0.4)' }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold text-white transition-all border cursor-pointer glow-cyan"
+                style={{ background: pdfLoading ? 'rgba(6,182,212,0.2)' : 'linear-gradient(135deg, rgba(139,92,246,0.3) 0%, rgba(6,182,212,0.3) 100%)', borderColor: 'rgba(6,182,212,0.5)' }}
               >
-                {pdfLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
-                {pdfLoading ? 'Exporting…' : 'PDF Report'}
+                {pdfLoading ? <Loader2 className="w-4 h-4 animate-spin text-cyan-300" /> : <Download className="w-4 h-4 text-cyan-300" />}
+                {pdfLoading ? 'Exporting…' : 'Download PDF'}
               </button>
-              <button onClick={onClose} className="w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 flex items-center justify-center border border-slate-700 transition-colors">
-                <X className="w-3.5 h-3.5 text-slate-400" />
+              <button onClick={onClose} className="w-9 h-9 rounded-xl bg-slate-900/60 hover:bg-slate-850 flex items-center justify-center border border-slate-800 hover:border-slate-700 transition-all cursor-pointer">
+                <X className="w-4 h-4 text-slate-400 hover:text-white" />
               </button>
             </div>
           </div>
 
           {/* Tabs */}
-          <div className="flex border-b px-6" style={{ borderColor: 'rgba(52,211,153,0.1)' }}>
+          <div className="flex border-b px-8" style={{ borderColor: 'rgba(139,92,246,0.1)' }}>
             {([
-              { id: 'overview', label: 'Comparison Overview', icon: BarChart2 },
-              { id: 'nodes',    label: 'Score Breakdowns', icon: Activity },
-              { id: 'config',   label: 'Weights & Config', icon: ListTodo },
+              { id: 'overview', label: 'AI Overview', icon: Sparkles },
+              { id: 'nodes',    label: 'Node Comparison Matrix', icon: BarChart2 },
+              { id: 'config',   label: 'Weights & Metrics Configuration', icon: Activity },
             ] as const).map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-medium border-b-2 transition-all ${
+                className={`flex items-center gap-2 px-5 py-3.5 text-xs font-bold border-b-2 transition-all cursor-pointer ${
                   activeTab === tab.id
-                    ? 'text-emerald-400 border-emerald-400'
+                    ? 'text-cyan-400 border-cyan-400 font-space tracking-wider'
                     : 'text-slate-500 border-transparent hover:text-slate-300'
                 }`}
               >
-                <tab.icon className="w-3 h-3" />
+                <tab.icon className="w-3.5 h-3.5" />
                 {tab.label}
               </button>
             ))}
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto p-6 space-y-5">
+          <div className="flex-1 overflow-y-auto p-8 space-y-6">
 
             {/* ── Summary Cards (always visible) ── */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[
-                { label: 'Selected Node',   value: winner?.deviceName ?? '—',               icon: Trophy,  color: 'text-emerald-400' },
-                { label: 'Final Score',     value: `${decision.finalScore.toFixed(2)}/100`, icon: BarChart2, color: 'text-blue-400' },
-                { label: 'Confidence',      value: `${decision.confidence}%`,               icon: ShieldCheck, color: 'text-purple-400' },
-                { label: 'Est. Completion', value: `~${decision.expectedCompletionMinutes ?? 5} min`, icon: Clock, color: 'text-amber-400' },
+                { label: 'Selected Node',   value: winner?.deviceName ?? '—',               icon: Trophy,  textColor: 'text-cyan-400', borderGlow: 'glow-cyan', bg: 'bg-cyan-950/20 border-cyan-500/20' },
+                { label: 'Final Score',     value: `${decision.finalScore.toFixed(2)}/100`, icon: BarChart2, textColor: 'text-violet-400', borderGlow: 'glow-violet', bg: 'bg-violet-950/20 border-violet-500/20' },
+                { label: 'Confidence',      value: `${decision.confidence}%`,               icon: ShieldCheck, textColor: 'text-indigo-400', borderGlow: '', bg: 'bg-indigo-950/25 border-indigo-500/20' },
+                { label: 'Est. Completion', value: `~${decision.expectedCompletionMinutes ?? 5} min`, icon: Clock, textColor: 'text-amber-400', borderGlow: '', bg: 'bg-amber-950/15 border-amber-500/20' },
               ].map((card) => (
-                <div key={card.label} className="rounded-xl p-4 border" style={{ background: 'rgba(15,23,42,0.8)', borderColor: 'rgba(52,211,153,0.12)' }}>
-                  <div className="flex items-center gap-2 mb-1">
-                    <card.icon className={`w-3.5 h-3.5 ${card.color}`} />
-                    <span className="text-[10px] text-slate-500 uppercase tracking-wider">{card.label}</span>
+                <div key={card.label} className={`rounded-2xl p-5 border ${card.bg} ${card.borderGlow} transition-all duration-300 hover:scale-[1.01]`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <card.icon className={`w-4 h-4 ${card.textColor}`} />
+                    <span className="text-[10px] text-slate-400 font-extrabold uppercase tracking-widest">{card.label}</span>
                   </div>
-                  <p className={`text-lg font-bold ${card.color} truncate`}>{card.value}</p>
+                  <p className={`text-2xl font-black font-space tracking-tight ${card.textColor} truncate`}>{card.value}</p>
                 </div>
               ))}
             </div>
@@ -861,35 +883,35 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
             {activeTab === 'overview' && (
               <div className="space-y-4">
                 {/* AI Overview Performance Table */}
-                <div className="rounded-xl border border-slate-700 bg-slate-900/90 p-5 overflow-hidden shadow-2xl">
-                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
+                <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-6 overflow-hidden shadow-2xl backdrop-blur-md">
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
                     <div>
-                      <h3 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                        <BarChart2 className="w-4 h-4 text-emerald-400" /> PC Performance Comparison Matrix
+                      <h3 className="text-sm font-black text-transparent bg-clip-text bg-gradient-to-r from-violet-400 to-cyan-300 uppercase tracking-wider flex items-center gap-2 font-space">
+                        <BarChart2 className="w-5 h-5 text-violet-400" /> PC Performance Comparison Matrix
                       </h3>
-                      <p className="text-[10px] text-slate-300 mt-0.5">Real-time metrics, normalized factor scores, arithmetic average performance (equal weights), and weighted scheduler composite final score.</p>
+                      <p className="text-xs text-slate-400 mt-1 font-medium font-outfit">Real-time metrics, normalized factor scores, arithmetic average performance (equal weights), and weighted scheduler composite final score.</p>
                     </div>
-                    <div className="text-[10px] text-slate-200 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-700 font-mono self-start md:self-auto">
+                    <div className="text-[10px] text-cyan-300 bg-slate-950/80 px-4 py-2 rounded-xl border border-violet-500/20 font-jetbrains self-start md:self-auto">
                       Formula: Avg Score = (CPU + RAM + GPU + Temp + Net + Queue + Rel. + Disk) / 8
                     </div>
                   </div>
 
-                  <div className="overflow-x-auto -mx-5 px-5">
-                    <table className="w-full text-left text-xs border-collapse min-w-[800px]">
+                  <div className="overflow-x-auto -mx-6 px-6">
+                    <table className="w-full text-left text-xs border-collapse min-w-[850px] font-outfit">
                       <thead>
-                        <tr className="border-b-2 border-slate-600 text-slate-100 text-[10px] font-extrabold uppercase tracking-wider bg-slate-950/70">
-                          <th className="py-3 px-3">PC Node</th>
-                          <th className="py-3 px-2">CPU</th>
-                          <th className="py-3 px-2">RAM</th>
-                          <th className="py-3 px-2">GPU</th>
-                          <th className="py-3 px-2">SSD/Disk</th>
-                          <th className="py-3 px-2">Network</th>
-                          <th className="py-3 px-2 text-center">Avg Perf</th>
-                          <th className="py-3 px-2 text-center">Final Score</th>
-                          <th className="py-3 px-3 text-right">Selection</th>
+                        <tr className="border-b border-slate-800 text-slate-300 text-[10px] font-extrabold uppercase tracking-widest bg-slate-950/50">
+                          <th className="py-4 px-4 font-space">PC Node</th>
+                          <th className="py-4 px-3 font-space">CPU</th>
+                          <th className="py-4 px-3 font-space">RAM</th>
+                          <th className="py-4 px-3 font-space">GPU</th>
+                          <th className="py-4 px-3 font-space">SSD/Disk</th>
+                          <th className="py-4 px-3 font-space">Network</th>
+                          <th className="py-4 px-3 text-center font-space">Avg Perf</th>
+                          <th className="py-4 px-3 text-center font-space">Final Score</th>
+                          <th className="py-4 px-4 text-right font-space">Selection</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-slate-800/80 bg-slate-900/40">
+                      <tbody className="divide-y divide-slate-800/60 bg-slate-900/20">
                         {[...decision.rankedNodes, ...decision.eliminatedNodes].map((node) => {
                           const isWinner = node.deviceId === decision.selectedDeviceId;
                           const isElim = node.eliminated;
@@ -898,40 +920,40 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                           return (
                             <tr 
                               key={node.deviceId}
-                              className={`transition-colors hover:bg-slate-800/80 ${
+                              className={`transition-all duration-200 hover:bg-slate-850/40 ${
                                 isWinner 
-                                  ? 'bg-emerald-950/40 text-white font-semibold' 
+                                  ? 'bg-violet-950/20 text-white font-semibold border-l-2 border-violet-500' 
                                   : isElim 
-                                    ? 'bg-red-950/20 text-red-200' 
-                                    : 'text-slate-100'
+                                    ? 'bg-rose-950/5 text-slate-400' 
+                                    : 'text-slate-200'
                               }`}
                             >
                               {/* PC Node */}
-                              <td className="py-3 px-3 border-b border-slate-800">
-                                <div className="flex items-center gap-2.5">
+                              <td className="py-4 px-4 border-b border-slate-850">
+                                <div className="flex items-center gap-3">
                                   {isWinner ? (
-                                    <div className="w-5 h-5 rounded-full bg-emerald-500/30 flex items-center justify-center border border-emerald-400">
-                                      <Trophy className="w-3 h-3 text-emerald-300" />
+                                    <div className="w-6 h-6 rounded-lg bg-violet-500/25 flex items-center justify-center border border-violet-400/50 glow-violet flex-shrink-0">
+                                      <Trophy className="w-3.5 h-3.5 text-violet-300" />
                                     </div>
                                   ) : isElim ? (
-                                    <div className="w-5 h-5 rounded-full bg-red-500/30 flex items-center justify-center border border-red-400">
-                                      <XCircle className="w-3 h-3 text-red-400" />
+                                    <div className="w-6 h-6 rounded-lg bg-rose-500/20 flex items-center justify-center border border-rose-500/30 flex-shrink-0">
+                                      <XCircle className="w-3.5 h-3.5 text-rose-400" />
                                     </div>
                                   ) : (
-                                    <div className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-300 border border-slate-700">
-                                      C
+                                    <div className="w-6 h-6 rounded-lg bg-slate-800 flex items-center justify-center text-[10px] font-bold text-slate-400 border border-slate-700 flex-shrink-0">
+                                      PC
                                     </div>
                                   )}
                                   <div>
-                                    <div className="flex items-center gap-1.5">
-                                      <span className="font-bold text-xs block text-slate-50">{node.deviceName}</span>
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-bold text-sm block text-slate-100">{node.deviceName}</span>
                                       {isWinner && (
-                                        <span className="bg-emerald-500/20 text-emerald-400 text-[8px] font-extrabold px-1.5 py-0.5 rounded border border-emerald-500/30 uppercase">Winner</span>
+                                        <span className="bg-violet-500/20 text-violet-400 text-[8px] font-extrabold px-2 py-0.5 rounded border border-violet-500/30 uppercase tracking-widest">Winner</span>
                                       )}
                                     </div>
-                                    <span className="text-[9px] text-slate-400 font-mono tracking-tighter truncate max-w-[150px] block">{node.deviceId}</span>
+                                    <span className="text-[9px] text-slate-500 font-mono tracking-tighter truncate max-w-[140px] block mt-0.5">{node.deviceId}</span>
                                     {!isWinner && node.eliminationReason && (
-                                      <span className={`block text-[9px] mt-0.5 font-medium ${isElim ? 'text-red-400 font-bold' : 'text-amber-400/90'}`} style={{ maxWidth: '220px' }}>
+                                      <span className={`block text-[9px] mt-1 font-medium ${isElim ? 'text-rose-400 font-bold' : 'text-amber-400'}`} style={{ maxWidth: '220px' }}>
                                         {isElim ? '✗ Eliminated: ' : '⚠ Rejected: '}{node.eliminationReason}
                                       </span>
                                     )}
@@ -940,70 +962,70 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                               </td>
 
                               {/* CPU */}
-                              <td className="py-3 px-2 border-b border-slate-800">
-                                <div className="font-mono">
-                                  <span className="font-bold text-slate-50 block">{node.cpuUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-300">{node.cpuTemp.toFixed(0)}°C</span>
-                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.cpuScore.toFixed(0)}</span>
+                              <td className="py-4 px-3 border-b border-slate-850">
+                                <div className="font-jetbrains">
+                                  <span className="font-bold text-slate-100 text-xs block">{node.cpuUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-400 mt-0.5">{node.cpuTemp.toFixed(0)}°C</span>
+                                  <span className={`block text-[9px] font-bold ${scoreClass(node.cpuScore)}`}>Sc: {node.cpuScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* RAM */}
-                              <td className="py-3 px-2 border-b border-slate-800">
-                                <div className="font-mono">
-                                  <span className="font-bold text-slate-50 block">{node.ramUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-300">Uptime: {node.uptimeHours.toFixed(1)}h</span>
-                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.ramScore.toFixed(0)}</span>
+                              <td className="py-4 px-3 border-b border-slate-850">
+                                <div className="font-jetbrains">
+                                  <span className="font-bold text-slate-100 text-xs block">{node.ramUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-400 mt-0.5">Uptime: {node.uptimeHours.toFixed(1)}h</span>
+                                  <span className={`block text-[9px] font-bold ${scoreClass(node.ramScore)}`}>Sc: {node.ramScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* GPU */}
-                              <td className="py-3 px-2 border-b border-slate-800">
-                                <div className="font-mono">
-                                  <span className="font-bold text-slate-50 block">{node.gpuUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-300">{node.gpuTemp.toFixed(0)}°C</span>
-                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.gpuScore.toFixed(0)}</span>
+                              <td className="py-4 px-3 border-b border-slate-850">
+                                <div className="font-jetbrains">
+                                  <span className="font-bold text-slate-100 text-xs block">{node.gpuUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-400 mt-0.5">{node.gpuTemp.toFixed(0)}°C</span>
+                                  <span className={`block text-[9px] font-bold ${scoreClass(node.gpuScore)}`}>Sc: {node.gpuScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* SSD/Disk */}
-                              <td className="py-3 px-2 border-b border-slate-800">
-                                <div className="font-mono">
-                                  <span className="font-bold text-slate-50 block">{node.diskUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-300">{(node.diskReadMbps + node.diskWriteMbps).toFixed(0)} MB/s</span>
-                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.diskScore.toFixed(0)}</span>
+                              <td className="py-4 px-3 border-b border-slate-850">
+                                <div className="font-jetbrains">
+                                  <span className="font-bold text-slate-100 text-xs block">{node.diskUsage.toFixed(0)}%</span>
+                                  <span className="block text-[9px] text-slate-400 mt-0.5">{(node.diskReadMbps + node.diskWriteMbps).toFixed(0)} MB/s</span>
+                                  <span className={`block text-[9px] font-bold ${scoreClass(node.diskScore)}`}>Sc: {node.diskScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* Network */}
-                              <td className="py-3 px-2 border-b border-slate-800">
-                                <div className="font-mono">
-                                  <span className="font-bold text-slate-50 block">{node.latencyMs.toFixed(0)}ms</span>
-                                  <span className="block text-[9px] text-slate-300">{node.downloadMbps.toFixed(0)} Mbps</span>
-                                  <span className="block text-[9px] text-emerald-400 font-bold">Sc: {node.networkScore.toFixed(0)}</span>
+                              <td className="py-4 px-3 border-b border-slate-850">
+                                <div className="font-jetbrains">
+                                  <span className="font-bold text-slate-100 text-xs block">{node.latencyMs.toFixed(0)}ms</span>
+                                  <span className="block text-[9px] text-slate-400 mt-0.5">{node.downloadMbps.toFixed(0)} Mbps</span>
+                                  <span className={`block text-[9px] font-bold ${scoreClass(node.networkScore)}`}>Sc: {node.networkScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* Avg Perf */}
-                              <td className="py-3 px-2 text-center border-b border-slate-800">
-                                <span className={`inline-block font-mono font-black px-2.5 py-1 rounded text-xs ${
+                              <td className="py-4 px-3 text-center border-b border-slate-850">
+                                <span className={`inline-block font-jetbrains font-black px-3 py-1 rounded-lg text-xs ${
                                   isWinner 
-                                    ? 'bg-emerald-500 text-slate-950 shadow-[0_0_8px_rgba(52,211,153,0.4)]' 
+                                    ? 'bg-violet-500 text-slate-950 shadow-[0_0_12px_rgba(139,92,246,0.5)]' 
                                     : isElim 
-                                      ? 'bg-red-950 text-red-400 border border-red-900' 
-                                      : 'bg-cyan-950 text-cyan-300 border border-cyan-800'
+                                      ? 'bg-rose-950/40 text-rose-400 border border-rose-900/60' 
+                                      : 'bg-cyan-950/40 text-cyan-300 border border-cyan-900/30'
                                 }`}>
                                   {isElim ? '—' : `${avgPerf.toFixed(1)}`}
                                 </span>
                               </td>
 
                               {/* Final Score */}
-                              <td className="py-3 px-2 text-center border-b border-slate-800">
-                                <span className={`inline-block font-mono font-black px-2.5 py-1 rounded text-xs ${
+                              <td className="py-4 px-3 text-center border-b border-slate-850">
+                                <span className={`inline-block font-jetbrains font-black px-3 py-1 rounded-lg text-xs ${
                                   isWinner 
-                                    ? 'bg-emerald-500/35 border border-emerald-400 text-emerald-200 shadow-[0_0_8px_rgba(52,211,153,0.2)]' 
+                                    ? 'bg-cyan-500 text-slate-950 shadow-[0_0_12px_rgba(6,182,212,0.5)] border border-cyan-400' 
                                     : isElim 
-                                      ? 'bg-red-950/20 text-red-400 border border-red-900/60' 
+                                      ? 'bg-rose-950/20 text-rose-400 border border-rose-900/30' 
                                       : 'bg-slate-800 text-white border border-slate-700'
                                 }`}>
                                   {isElim ? '—' : `${node.finalScore.toFixed(1)}`}
@@ -1011,17 +1033,17 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                               </td>
 
                               {/* Selection/Status */}
-                              <td className="py-3 px-3 text-right border-b border-slate-800">
+                              <td className="py-4 px-4 text-right border-b border-slate-850 font-space">
                                 {isWinner ? (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-bold bg-emerald-500 text-slate-950 border border-emerald-300 shadow-[0_0_8px_rgba(52,211,153,0.3)]">
+                                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-extrabold bg-violet-600 text-white border border-violet-400/50 shadow-[0_0_10px_rgba(139,92,246,0.3)]">
                                     ✓ SELECTED BEST
                                   </span>
                                 ) : isElim ? (
-                                  <span className="inline-block text-[9px] text-red-300 font-semibold bg-red-950 border border-red-800/80 px-2 py-0.5 rounded" title={node.eliminationReason}>
+                                  <span className="inline-block text-[10px] text-rose-400 font-bold bg-rose-950/30 border border-rose-900/30 px-3 py-1 rounded-xl" title={node.eliminationReason}>
                                     ELIMINATED
                                   </span>
                                 ) : (
-                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[9px] font-semibold bg-slate-800 text-slate-300 border border-slate-700">
+                                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-[10px] font-bold bg-slate-800/40 text-slate-400 border border-slate-700">
                                     EVALUATED
                                   </span>
                                 )}
@@ -1036,66 +1058,68 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
 
                 {/* AI loading state */}
                 {aiLoading && (
-                  <div className="flex items-center gap-3 p-4 rounded-xl border" style={{ borderColor: 'rgba(99,179,237,0.2)', background: 'rgba(10,20,50,0.5)' }}>
-                    <Loader2 className="w-5 h-5 text-blue-400 animate-spin flex-shrink-0" />
+                  <div className="flex items-center gap-3 p-5 rounded-2xl border" style={{ borderColor: 'rgba(6,182,212,0.2)', background: 'rgba(6,182,212,0.05)' }}>
+                    <Loader2 className="w-5 h-5 text-cyan-400 animate-spin flex-shrink-0" />
                     <div>
-                      <p className="text-sm font-medium text-blue-300">Generating AI Analysis…</p>
+                      <p className="text-sm font-bold text-cyan-300">Generating AI Analysis…</p>
                       <p className="text-xs text-slate-500">Querying Groq llama-3.3-70b-versatile for deep insights</p>
                     </div>
                   </div>
                 )}
 
                 {aiError && (
-                  <div className="flex items-center gap-3 p-4 rounded-xl border border-red-500/20 bg-red-500/5">
-                    <AlertTriangle className="w-4 h-4 text-red-400 flex-shrink-0" />
-                    <p className="text-xs text-red-400">AI analysis unavailable — showing rule-based report</p>
+                  <div className="flex items-center gap-3 p-5 rounded-2xl border border-rose-500/20 bg-rose-500/5">
+                    <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0" />
+                    <p className="text-xs text-rose-400">AI analysis unavailable — showing rule-based report</p>
                   </div>
                 )}
 
                 {aiReport && (
                   <>
                     {aiReport.generatedBy === 'groq' && (
-                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg w-fit text-xs text-emerald-400 border border-emerald-500/20 bg-emerald-500/5">
-                        <Sparkles className="w-3 h-3" />
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg w-fit text-xs text-cyan-400 border border-cyan-500/20 bg-cyan-500/5 font-mono">
+                        <Sparkles className="w-3 h-3 text-cyan-400" />
                         Powered by {aiReport.modelUsed} · {aiReport.latencyMs}ms
                       </div>
                     )}
 
                     {/* Executive Summary */}
-                    <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(52,211,153,0.15)', background: 'rgba(10,20,40,0.6)' }}>
-                      <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-2">
-                        <FileText className="w-3 h-3" /> Executive Summary
+                    <div className="rounded-2xl p-5 border border-violet-500/20 bg-violet-950/5">
+                      <h3 className="text-xs font-extrabold text-violet-400 uppercase tracking-widest mb-3 flex items-center gap-2 font-space">
+                        <FileText className="w-4 h-4 text-violet-400" /> Executive Summary
                       </h3>
-                      <p className="text-sm text-slate-300 leading-relaxed">{aiReport.executiveSummary}</p>
+                      <p className="text-sm text-slate-300 leading-relaxed font-outfit font-medium">{aiReport.executiveSummary}</p>
                     </div>
 
                     {/* Selection Rationale */}
-                    <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(99,179,237,0.15)', background: 'rgba(10,20,40,0.6)' }}>
-                      <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Selection Rationale</h3>
-                      <p className="text-sm text-slate-300 leading-relaxed">{aiReport.selectionRationale}</p>
+                    <div className="rounded-2xl p-5 border border-cyan-500/20 bg-cyan-950/5">
+                      <h3 className="text-xs font-extrabold text-cyan-400 uppercase tracking-widest mb-3 flex items-center gap-2 font-space">
+                        <Sparkles className="w-4 h-4 text-cyan-400" /> Selection Rationale
+                      </h3>
+                      <p className="text-sm text-slate-300 leading-relaxed font-outfit font-medium">{aiReport.selectionRationale}</p>
                     </div>
 
                     {/* Grid: Risk + Insights */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(245,158,11,0.15)', background: 'rgba(20,15,5,0.5)' }}>
-                        <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider mb-2">Risk Assessment</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">{aiReport.riskAssessment}</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                      <div className="rounded-2xl p-5 border border-rose-500/20 bg-rose-950/5 glow-rose">
+                        <h3 className="text-xs font-extrabold text-rose-400 uppercase tracking-widest mb-3 font-space">Risk Assessment</h3>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">{aiReport.riskAssessment}</p>
                       </div>
-                      <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(139,92,246,0.15)', background: 'rgba(15,10,25,0.5)' }}>
-                        <h3 className="text-xs font-bold text-purple-400 uppercase tracking-wider mb-2">Performance Insights</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">{aiReport.performanceInsights}</p>
+                      <div className="rounded-2xl p-5 border border-purple-500/20 bg-purple-950/5 glow-violet">
+                        <h3 className="text-xs font-extrabold text-purple-400 uppercase tracking-widest mb-3 font-space">Performance Insights</h3>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">{aiReport.performanceInsights}</p>
                       </div>
                     </div>
 
                     {/* Recommendations */}
                     {aiReport.recommendations.length > 0 && (
-                      <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(52,211,153,0.15)', background: 'rgba(10,20,40,0.5)' }}>
-                        <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">AI Recommendations</h3>
-                        <div className="space-y-2">
+                      <div className="rounded-2xl p-5 border border-cyan-500/20 bg-cyan-950/5">
+                        <h3 className="text-xs font-extrabold text-cyan-400 uppercase tracking-widest mb-4 font-space">AI Recommendations</h3>
+                        <div className="space-y-3">
                           {aiReport.recommendations.map((rec, i) => (
-                            <div key={i} className="flex items-start gap-2.5">
-                              <span className="mt-0.5 w-4 h-4 rounded-full bg-emerald-500/20 flex items-center justify-center flex-shrink-0 text-[9px] text-emerald-400 font-bold">{i + 1}</span>
-                              <p className="text-xs text-slate-300 leading-relaxed">{rec}</p>
+                            <div key={i} className="flex items-start gap-3">
+                              <span className="mt-0.5 w-5 h-5 rounded-lg bg-cyan-500/20 flex items-center justify-center flex-shrink-0 text-[10px] text-cyan-300 font-bold border border-cyan-500/30 font-jetbrains">{i + 1}</span>
+                              <p className="text-xs text-slate-300 leading-relaxed font-medium">{rec}</p>
                             </div>
                           ))}
                         </div>
@@ -1104,22 +1128,22 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
 
                     {/* Comparison Narrative */}
                     {decision.rankedNodes.length > 1 && (
-                      <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(99,179,237,0.12)', background: 'rgba(10,20,40,0.5)' }}>
-                        <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Winner vs. Runner-Up</h3>
-                        <p className="text-xs text-slate-400 leading-relaxed">{aiReport.comparisonNarrative}</p>
+                      <div className="rounded-2xl p-5 border border-violet-500/10 bg-violet-950/5">
+                        <h3 className="text-xs font-extrabold text-violet-400 uppercase tracking-widest mb-3 font-space">Winner vs. Runner-Up</h3>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">{aiReport.comparisonNarrative}</p>
                       </div>
                     )}
                   </>
                 )}
 
                 {/* Positive facts always shown */}
-                <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(52,211,153,0.12)', background: 'rgba(10,20,40,0.5)' }}>
-                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">Contributing Factors</h3>
-                  <div className="grid gap-1.5">
+                <div className="rounded-2xl p-5 border border-cyan-500/10 bg-slate-900/40">
+                  <h3 className="text-xs font-extrabold text-cyan-400 uppercase tracking-widest mb-4 font-space">Contributing Factors</h3>
+                  <div className="grid gap-2.5">
                     {decision.positiveFacts.map((fact, i) => (
-                      <div key={i} className="flex items-center gap-2">
-                        <CheckCircle className="w-3.5 h-3.5 text-emerald-400 flex-shrink-0" />
-                        <span className="text-xs text-slate-300">{fact}</span>
+                      <div key={i} className="flex items-center gap-3">
+                        <CheckCircle className="w-4 h-4 text-cyan-400 flex-shrink-0" />
+                        <span className="text-xs text-slate-300 font-medium">{fact}</span>
                       </div>
                     ))}
                   </div>
@@ -1127,9 +1151,9 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
 
                 {/* Winner score bars */}
                 {winner && (
-                  <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(52,211,153,0.12)', background: 'rgba(10,20,40,0.5)' }}>
-                    <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-3">Score Breakdown — {winner.deviceName}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
+                  <div className="rounded-2xl p-6 border border-violet-500/15 bg-slate-900/40">
+                    <h3 className="text-xs font-extrabold text-violet-400 uppercase tracking-widest mb-4 font-space">Score Breakdown — {winner.deviceName}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
                       <ScoreBar value={winner.cpuScore}         label="CPU"         icon={Cpu} />
                       <ScoreBar value={winner.ramScore}         label="RAM"         icon={MemoryStick} />
                       <ScoreBar value={winner.gpuScore}         label="GPU"         icon={Zap} />
@@ -1146,39 +1170,39 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
 
             {/* ── NODES TAB ── */}
             {activeTab === 'nodes' && (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {/* Ranked nodes */}
                 <div>
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Ranked Candidates</h3>
-                  <div className="space-y-2">
+                  <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-4 font-space">Ranked Candidates</h3>
+                  <div className="space-y-3.5">
                     {decision.rankedNodes.map((node, idx) => (
                       <div
                         key={node.deviceId}
-                        className="rounded-xl p-4 border"
-                        style={{
-                          borderColor: idx === 0 ? 'rgba(52,211,153,0.3)' : 'rgba(52,211,153,0.08)',
-                          background:  idx === 0 ? 'rgba(15,60,40,0.2)' : 'rgba(10,15,30,0.5)',
-                        }}
+                        className={`rounded-2xl p-5 border transition-all duration-200 hover:scale-[1.005] ${
+                          idx === 0
+                            ? 'border-violet-500/35 bg-violet-950/15 glow-violet'
+                            : 'border-slate-800/80 bg-slate-900/40'
+                        }`}
                       >
-                        <div className="flex items-start justify-between gap-4 mb-3">
+                        <div className="flex items-start justify-between gap-4 mb-4">
                           <div className="flex items-center gap-3">
                             {idx === 0
-                              ? <Trophy className="w-4 h-4 text-emerald-400 flex-shrink-0" />
-                              : <span className="w-4 h-4 rounded-full bg-slate-700 flex items-center justify-center text-[9px] text-slate-400 font-bold flex-shrink-0">{idx + 1}</span>
+                              ? <Trophy className="w-5 h-5 text-violet-400 flex-shrink-0" />
+                              : <span className="w-5 h-5 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-bold flex-shrink-0 border border-slate-700">{idx + 1}</span>
                             }
                             <div>
-                              <p className={`text-sm font-bold ${idx === 0 ? 'text-emerald-300' : 'text-slate-200'}`}>{node.deviceName}</p>
-                              <p className="text-[10px] text-slate-500 font-mono">{node.deviceId.slice(0, 20)}…</p>
+                              <p className={`text-sm font-bold font-space ${idx === 0 ? 'text-violet-300' : 'text-slate-250'}`}>{node.deviceName}</p>
+                              <p className="text-[10px] text-slate-500 font-mono mt-0.5">{node.deviceId.slice(0, 24)}…</p>
                             </div>
                           </div>
                           <div className="text-right flex-shrink-0">
-                            <p className={`text-xl font-black ${scoreClass(node.finalScore)}`}>{node.finalScore.toFixed(2)}</p>
-                            <p className="text-[9px] text-slate-500">/ 100</p>
+                            <p className={`text-2xl font-black font-jetbrains tracking-tight ${scoreClass(node.finalScore)}`}>{node.finalScore.toFixed(2)}</p>
+                            <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider">/ 100</p>
                           </div>
                         </div>
 
                         {/* Metric grid */}
-                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2">
+                        <div className="grid grid-cols-3 md:grid-cols-6 gap-2.5">
                           {[
                             { label: 'CPU',      value: `${node.cpuUsage.toFixed(0)}%`,     icon: Cpu },
                             { label: 'RAM',      value: `${node.ramUsage.toFixed(0)}%`,     icon: MemoryStick },
@@ -1187,16 +1211,16 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                             { label: 'Latency',  value: `${node.latencyMs.toFixed(0)}ms`,   icon: Wifi },
                             { label: 'Tasks',    value: `${node.runningTasks}/${node.waitingTasks}`, icon: ListTodo },
                           ].map(({ label, value, icon: Icon }) => (
-                            <div key={label} className="rounded-lg p-2 bg-slate-900/50 text-center">
-                              <Icon className="w-3 h-3 text-slate-500 mx-auto mb-0.5" />
-                              <p className="text-[9px] text-slate-500">{label}</p>
-                              <p className="text-xs text-slate-200 font-mono font-medium">{value}</p>
+                            <div key={label} className="rounded-xl p-3 bg-slate-950/60 text-center border border-slate-900/60">
+                              <Icon className="w-3.5 h-3.5 text-slate-500 mx-auto mb-1" />
+                              <p className="text-[9px] text-slate-550 font-bold uppercase tracking-wider">{label}</p>
+                              <p className="text-xs text-slate-200 font-jetbrains font-bold mt-0.5">{value}</p>
                             </div>
                           ))}
                         </div>
 
                         {/* Score bars compact */}
-                        <div className="mt-3 grid grid-cols-2 gap-1">
+                        <div className="mt-4 grid grid-cols-2 gap-2">
                           <ScoreBar value={node.cpuScore}         label="CPU"   icon={Cpu} />
                           <ScoreBar value={node.ramScore}         label="RAM"   icon={MemoryStick} />
                           <ScoreBar value={node.networkScore}     label="Net"   icon={Wifi} />
@@ -1204,8 +1228,8 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                         </div>
 
                         {idx > 0 && node.eliminationReason && (
-                          <p className="mt-2 text-[10px] text-slate-500 flex items-center gap-1">
-                            <XCircle className="w-3 h-3 text-amber-500" />
+                          <p className="mt-3 text-[10px] text-slate-500 flex items-center gap-1.5 font-medium">
+                            <XCircle className="w-3.5 h-3.5 text-rose-500" />
                             {node.eliminationReason}
                           </p>
                         )}
@@ -1217,14 +1241,14 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                 {/* Eliminated */}
                 {decision.eliminatedNodes.length > 0 && (
                   <div>
-                    <h3 className="text-xs font-bold text-red-400 uppercase tracking-wider mb-3">Eliminated Nodes</h3>
-                    <div className="space-y-2">
+                    <h3 className="text-xs font-extrabold text-rose-400 uppercase tracking-widest mb-4 font-space">Eliminated Nodes</h3>
+                    <div className="space-y-3">
                       {decision.eliminatedNodes.map(node => (
-                        <div key={node.deviceId} className="rounded-xl p-3 border border-red-500/15 bg-red-500/5 flex items-center gap-3">
-                          <XCircle className="w-4 h-4 text-red-400 flex-shrink-0" />
+                        <div key={node.deviceId} className="rounded-2xl p-4 border border-rose-500/20 bg-rose-950/5 flex items-center gap-4 glow-rose">
+                          <XCircle className="w-5 h-5 text-rose-400 flex-shrink-0" />
                           <div>
-                            <p className="text-sm font-semibold text-red-300">{node.deviceName}</p>
-                            <p className="text-xs text-red-400/70">{node.eliminationReason}</p>
+                            <p className="text-sm font-bold text-rose-300 font-space">{node.deviceName}</p>
+                            <p className="text-xs text-rose-400/80 mt-0.5">{node.eliminationReason}</p>
                           </div>
                         </div>
                       ))}
@@ -1236,10 +1260,10 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
 
             {/* ── CONFIG TAB ── */}
             {activeTab === 'config' && (
-              <div className="space-y-4">
-                <div className="rounded-xl p-4 border" style={{ borderColor: 'rgba(52,211,153,0.12)', background: 'rgba(10,15,30,0.6)' }}>
-                  <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-4">Active Scheduler Weights</h3>
-                  <div className="space-y-3">
+              <div className="space-y-5">
+                <div className="rounded-2xl p-5 border border-slate-800 bg-slate-900/40">
+                  <h3 className="text-xs font-extrabold text-violet-400 uppercase tracking-widest mb-5 font-space">Active Scheduler Weights</h3>
+                  <div className="space-y-4">
                     {[
                       { label: 'CPU Availability',       key: 'cpu',         icon: Cpu,        w: decision.weights.cpu },
                       { label: 'RAM Availability',       key: 'ram',         icon: MemoryStick, w: decision.weights.ram },
@@ -1251,33 +1275,33 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                       { label: 'Disk Health & I/O',      key: 'disk',        icon: HardDrive,  w: decision.weights.disk },
                     ].map(({ label, icon: Icon, w }) => (
                       <div key={label} className="flex items-center gap-3">
-                        <Icon className="w-3.5 h-3.5 text-slate-500 flex-shrink-0" />
-                        <span className="text-xs text-slate-400 w-40 flex-shrink-0">{label}</span>
-                        <div className="flex-1 bg-slate-800 rounded-full h-2 overflow-hidden">
-                          <div className="h-full rounded-full bg-emerald-500/60" style={{ width: `${w * 100}%` }} />
+                        <Icon className="w-4 h-4 text-slate-500 flex-shrink-0" />
+                        <span className="text-xs text-slate-300 w-44 flex-shrink-0 font-medium">{label}</span>
+                        <div className="flex-1 bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-900">
+                          <div className="h-full rounded-full bg-gradient-to-r from-violet-600 to-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.4)]" style={{ width: `${w * 100}%` }} />
                         </div>
-                        <span className="text-xs font-mono font-bold text-emerald-400 w-10 text-right">{(w * 100).toFixed(0)}%</span>
+                        <span className="text-xs font-jetbrains font-bold text-cyan-400 w-12 text-right">{(w * 100).toFixed(0)}%</span>
                       </div>
                     ))}
                   </div>
-                  <div className="mt-3 pt-3 border-t border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-500">Total weight</span>
-                    <span className="text-xs font-mono font-bold text-emerald-400">
+                  <div className="mt-4 pt-4 border-t border-slate-800/80 flex items-center justify-between">
+                    <span className="text-xs text-slate-500 font-bold uppercase tracking-wider">Total weight</span>
+                    <span className="text-xs font-jetbrains font-bold text-cyan-400">
                       {(Object.values(decision.weights).reduce((a, b) => a + b, 0) * 100).toFixed(0)}%
                     </span>
                   </div>
                 </div>
 
                 {aiReport?.technicianNotes && (
-                  <div className="rounded-xl p-4 border border-slate-700/30 bg-slate-900/30">
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Technician Notes</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">{aiReport.technicianNotes}</p>
+                  <div className="rounded-2xl p-5 border border-slate-800 bg-slate-900/30">
+                    <h3 className="text-xs font-extrabold text-slate-450 uppercase tracking-widest mb-3 font-space">Technician Notes</h3>
+                    <p className="text-xs text-slate-400 leading-relaxed font-medium">{aiReport.technicianNotes}</p>
                   </div>
                 )}
 
-                <div className="rounded-xl p-4 border border-slate-700/20 bg-slate-900/20">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Decision Metadata</h3>
-                  <div className="grid grid-cols-2 gap-2">
+                <div className="rounded-2xl p-5 border border-slate-800 bg-slate-900/20">
+                  <h3 className="text-xs font-extrabold text-slate-400 uppercase tracking-widest mb-4 font-space">Decision Metadata</h3>
+                  <div className="grid grid-cols-2 gap-3">
                     {[
                       { label: 'Decision ID',    value: String(decision.timestamp) },
                       { label: 'Nodes Scored',   value: String(decision.totalConsidered) },
@@ -1286,9 +1310,9 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                       { label: 'Confidence',     value: `${decision.confidence}%` },
                       { label: 'Score Margin',   value: decision.rankedNodes.length > 1 ? (decision.rankedNodes[0].finalScore - decision.rankedNodes[1].finalScore).toFixed(4) : 'N/A' },
                     ].map(({ label, value }) => (
-                      <div key={label} className="rounded-lg p-2.5 bg-slate-900/50">
-                        <p className="text-[10px] text-slate-500 mb-0.5">{label}</p>
-                        <p className="text-xs font-mono text-slate-300">{value}</p>
+                      <div key={label} className="rounded-xl p-3.5 bg-slate-950/60 border border-slate-900/60">
+                        <p className="text-[10px] text-slate-500 mb-1 font-bold uppercase tracking-widest">{label}</p>
+                        <p className="text-xs font-jetbrains text-slate-300 font-bold">{value}</p>
                       </div>
                     ))}
                   </div>

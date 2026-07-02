@@ -33,11 +33,13 @@ export interface AIAnalysisReport {
 
 function buildPrompt(decision: AnyDecision): string {
   const winner = decision.selectedNode;
-  const all    = decision.allScores;
+  const winnerName = winner ? winner.hostname : 'None (No healthy nodes available)';
+  const all    = decision.allScores || [];
 
-  const nodeTable = all.map((n: any) => {
-    const eliminated = decision.eliminatedNodes?.find((e: any) => e.nodeId === n.nodeId);
-    return `
+  const nodeTable = all.length > 0
+    ? all.map((n: any) => {
+        const eliminated = decision.eliminatedNodes?.find((e: any) => e.nodeId === n.nodeId);
+        return `
 Node: ${n.hostname} (${n.nodeId.slice(0, 8)}...)
   Status: ${eliminated ? `ELIMINATED — ${eliminated.reason}` : 'Evaluated'}
   Final Score: ${n.totalScore.toFixed(4)} (Rank #${n.rank})
@@ -49,7 +51,8 @@ Node: ${n.hostname} (${n.nodeId.slice(0, 8)}...)
   Score Breakdown: CPU=${n.components.cpu.toFixed(2)}, RAM=${n.components.ram.toFixed(2)}, GPU=${n.components.gpu.toFixed(2)}, Temp=${n.components.temp.toFixed(2)}, Net=${n.components.network.toFixed(2)}, Queue=${n.components.queue.toFixed(2)}, Reliability=${n.components.reliability.toFixed(2)}, Disk=${n.components.disk.toFixed(2)}
   Average Performance Score: ${n.averagePerformance?.toFixed(2)} / 100
 `.trim();
-  }).join('\n\n');
+      }).join('\n\n')
+    : '(No nodes passed health checks or were evaluated)';
 
   return `
 You are ClusterOS AI, an enterprise-grade intelligent workload scheduler analyzer.
@@ -58,8 +61,8 @@ Your role is to produce a professional, accurate, and deeply insightful report e
 === SCHEDULING DECISION ===
 Decision ID:     ${decision.decisionId}
 Timestamp:       ${new Date(decision.timestamp).toISOString()}
-Selected Node:   ${winner.hostname}
-Confidence:      ${decision.confidence.toFixed(1)}%
+Selected Node:   ${winnerName}
+Confidence:      ${(decision.confidence ?? 0).toFixed(1)}%
 Margin over 2nd: ${decision.scoreMargin?.toFixed(4) ?? 'N/A'}
 Tiebreaker used: ${decision.tiebreakerUsed ?? 'None'}
 Routing reason:  ${decision.routingReason}
@@ -148,10 +151,10 @@ export async function generateAIAnalysis(decision: AnyDecision): Promise<AIAnaly
 // ─── Fallback Rule-Based Analysis ─────────────────────────────────────────────
 
 export function buildFallbackAnalysis(decision: AnyDecision, latencyMs = 0): AIAnalysisReport {
-  if (!decision || !decision.selectedNode || !decision.allScores || decision.allScores.length === 0) {
+  if (!decision) {
     return {
-      executiveSummary: 'Preparing PC comparison matrix and loading data...',
-      selectionRationale: 'Loading scheduler breakdown details...',
+      executiveSummary: 'No decision data available.',
+      selectionRationale: 'Could not load scheduler breakdown details.',
       performanceInsights: '',
       riskAssessment: '',
       recommendations: [],
@@ -162,7 +165,30 @@ export function buildFallbackAnalysis(decision: AnyDecision, latencyMs = 0): AIA
     };
   }
 
-  const winner   = decision.selectedNode;
+  const winner = decision.selectedNode;
+  const allScores = decision.allScores ?? [];
+  const eliminatedNodes = decision.eliminatedNodes ?? [];
+
+  if (!winner || allScores.length === 0) {
+    return {
+      executiveSummary: `No active PC nodes were selected. All ${eliminatedNodes.length} candidate node(s) were eliminated from scheduling due to health checks or offline status.`,
+      selectionRationale: `The scheduler could not dispatch the workload because no healthy candidate nodes met the required execution criteria. Ensure that the ClusterOS agents are running on target devices and they are online.`,
+      performanceInsights: eliminatedNodes.length > 0
+        ? `All discovered nodes (${eliminatedNodes.map((n: any) => n.hostname || n.deviceName || n.nodeId).join(', ')}) are currently offline or reporting critical health issues.`
+        : `No PC nodes were discovered in the cluster.`,
+      riskAssessment: 'Critical status: cluster capacity is at zero. Workloads cannot be routed.',
+      recommendations: [
+        'Check network connectivity for all cluster nodes',
+        'Verify that the ClusterOSAgent service is running on target PCs',
+        'Ensure firewall rules allow scheduling agent communication'
+      ],
+      comparisonNarrative: 'No node comparison possible as all nodes are offline or eliminated.',
+      technicianNotes: `Cluster OS Scheduler status - ZERO healthy nodes. Total considered: ${eliminatedNodes.length} (all eliminated).`,
+      generatedBy: 'fallback',
+      latencyMs,
+    };
+  }
+
   const allValid = decision.allScores.filter((n: any) => !decision.eliminatedNodes?.find((e: any) => e.nodeId === n.nodeId));
   const runnerUp = allValid.find((n: any) => n.rank === 2);
 
