@@ -89,19 +89,26 @@ export const useAppStore = create<AppState>()(
 
 // Derived selectors
 export const selectOnlineDevices = (state: AppState) =>
-  state.devices.filter(d => state.metricsMap[d.deviceId]?.status === 'online');
+  state.devices.filter(d => {
+    const m = state.metricsMap[d.deviceId];
+    return m?.status === 'online' && (Date.now() - (m.timestamp ?? 0)) < 15000;
+  });
 
 export const selectOfflineDevices = (state: AppState) =>
-  state.devices.filter(d => state.metricsMap[d.deviceId]?.status !== 'online');
+  state.devices.filter(d => {
+    const m = state.metricsMap[d.deviceId];
+    return !m || m.status !== 'online' || (Date.now() - (m.timestamp ?? 0)) >= 15000;
+  });
 
 export const selectClusterStats = (clusterId: string) => (state: AppState) => {
   const cluster = state.clusters.find(c => c.id === clusterId);
   if (!cluster) return null;
 
   const clusterDevices = state.devices.filter(d => cluster.deviceIds.includes(d.deviceId));
-  const onlineCount = clusterDevices.filter(d =>
-    state.metricsMap[d.deviceId]?.status === 'online'
-  ).length;
+  const onlineCount = clusterDevices.filter(d => {
+    const m = state.metricsMap[d.deviceId];
+    return m?.status === 'online' && (Date.now() - (m.timestamp ?? 0)) < 15000;
+  }).length;
 
   let totalCpu = 0, totalRam = 0, usedRam = 0, totalGpu = 0;
 

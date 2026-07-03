@@ -62,28 +62,38 @@ public class AgentService : BackgroundService
         {
             try
             {
-                bool codeExists = await _rtdbClient.CheckPairCodeExistsAsync(_identity.PairCode);
-                if (!codeExists)
+                bool isAlreadyPaired = await _rtdbClient.CheckDevicePairedAsync(_identity.DeviceId);
+                if (isAlreadyPaired)
                 {
-                    if (!_identity.IsRegistered)
+                    _logger.LogInformation("Device is already marked as paired in RTDB. Syncing state locally.");
+                    await _pairingService.MarkAsPairedAsync(_identity.DeviceId, "dashboard_user");
+                    _identity = _pairingService.CurrentIdentity;
+                }
+                else
+                {
+                    bool codeExists = await _rtdbClient.CheckPairCodeExistsAsync(_identity.PairCode);
+                    if (!codeExists)
                     {
-                        _logger.LogInformation("Registering pair code {PairCode} for device {DeviceId} in RTDB", _identity.PairCode, _identity.DeviceId);
-                        await _rtdbClient.RegisterPairCodeAsync(_identity.DeviceId, _identity.PairCode, _identity.MachineName);
+                        if (!_identity.IsRegistered)
+                        {
+                            _logger.LogInformation("Registering pair code {PairCode} for device {DeviceId} in RTDB", _identity.PairCode, _identity.DeviceId);
+                            await _rtdbClient.RegisterPairCodeAsync(_identity.DeviceId, _identity.PairCode, _identity.MachineName);
+                            await _pairingService.MarkAsRegisteredAsync();
+                        }
+                        else
+                        {
+                            // It was registered, but it is not in the database anymore.
+                            // This means the dashboard consumed/deleted it, meaning the device has been successfully paired!
+                            _logger.LogInformation("Pair code not found in RTDB but marked as registered locally. Transitioning to paired state.");
+                            await _pairingService.MarkAsPairedAsync(_identity.DeviceId, "dashboard_user");
+                            _identity = _pairingService.CurrentIdentity; // reload local reference
+                        }
+                    }
+                    else if (!_identity.IsRegistered)
+                    {
+                        // If it exists in RTDB but locally we didn't save it as registered, sync local status.
                         await _pairingService.MarkAsRegisteredAsync();
                     }
-                    else
-                    {
-                        // It was registered, but it is not in the database anymore.
-                        // This means the dashboard consumed/deleted it, meaning the device has been successfully paired!
-                        _logger.LogInformation("Pair code not found in RTDB but marked as registered locally. Transitioning to paired state.");
-                        await _pairingService.MarkAsPairedAsync(_identity.DeviceId, "dashboard_user");
-                        _identity = _pairingService.CurrentIdentity; // reload local reference
-                    }
-                }
-                else if (!_identity.IsRegistered)
-                {
-                    // If it exists in RTDB but locally we didn't save it as registered, sync local status.
-                    await _pairingService.MarkAsRegisteredAsync();
                 }
             }
             catch (Exception ex)
@@ -145,23 +155,50 @@ public class AgentService : BackgroundService
     {
         if (_identity == null || ct.IsCancellationRequested) return;
 
-        // Check pairing status if not yet paired
-        if (!_identity.IsPaired)
+        // Check pairing status dynamically
+        try
         {
-            try
+            bool isPairedInDb = await _rtdbClient.CheckDevicePairedAsync(_identity.DeviceId);
+            
+            if (isPairedInDb)
             {
-                bool codeExists = await _rtdbClient.CheckPairCodeExistsAsync(_identity.PairCode);
-                if (!codeExists && _identity.IsRegistered)
+                if (!_identity.IsPaired)
                 {
-                    _logger.LogInformation("Pair code consumed. Device is now paired!");
+                    _logger.LogInformation("Device is now paired in RTDB!");
                     await _pairingService.MarkAsPairedAsync(_identity.DeviceId, "dashboard_user");
                     _identity = _pairingService.CurrentIdentity; // reload local reference
                 }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "Failed to poll pair code status");
+                if (_identity.IsPaired)
+                {
+                    _logger.LogInformation("Device was unpaired from dashboard. Reverting to unpaired state.");
+                    await _pairingService.UnpairAsync();
+                    _identity = _pairingService.CurrentIdentity; // reload local reference
+                    if (_identity == null) return;
+                    
+                    // Register the new pair code
+                    _logger.LogInformation("Re-registering pair code {PairCode} in RTDB", _identity.PairCode);
+                    await _rtdbClient.RegisterPairCodeAsync(_identity.DeviceId, _identity.PairCode, _identity.MachineName);
+                    await _pairingService.MarkAsRegisteredAsync();
+                    _identity = _pairingService.CurrentIdentity; // reload local reference
+                }
+                else
+                {
+                    bool codeExists = await _rtdbClient.CheckPairCodeExistsAsync(_identity.PairCode);
+                    if (!codeExists && _identity.IsRegistered)
+                    {
+                        _logger.LogInformation("Pair code consumed. Device is now paired!");
+                        await _pairingService.MarkAsPairedAsync(_identity.DeviceId, "dashboard_user");
+                        _identity = _pairingService.CurrentIdentity; // reload local reference
+                    }
+                }
             }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to poll pairing/unpairing status from RTDB");
         }
 
         try

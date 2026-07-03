@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Monitor, Activity, Terminal, Network,
   Briefcase, BarChart3, Settings, LogOut, ChevronLeft,
   ChevronRight, Zap, Bell, Search, Menu, X, Download,
-  Globe, MapPin
+  Globe, MapPin, Banknote, Smartphone
 } from 'lucide-react';
 
 type NavItem = { href: string; icon: React.ElementType; label: string; exact?: boolean };
@@ -24,13 +24,29 @@ const navItems: NavItem[] = [
   { href: '/clusters', icon: Network, label: 'Clusters' },
   { href: '/jobs', icon: Briefcase, label: 'Jobs' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
+  { href: '/rentals', icon: Banknote, label: 'Rentals' },
   { href: '/settings', icon: Settings, label: 'Settings' },
 ];
 
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const { sidebarCollapsed, toggleSidebar, devices, metricsMap } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [portalRole, setPortalRole] = useState<'developer' | 'host'>('developer');
+
+  useEffect(() => {
+    const role = localStorage.getItem('portal_role');
+    if (role === 'host') {
+      setPortalRole('host');
+      // Redirect hosts to /rentals if they are on any other page
+      if (!pathname.startsWith('/rentals') && !pathname.startsWith('/settings')) {
+        router.replace('/rentals');
+      }
+    } else {
+      setPortalRole('developer');
+    }
+  }, [pathname, router]);
 
   const onlineCount = devices.filter(d => metricsMap[d.deviceId]?.status === 'online').length;
 
@@ -38,6 +54,13 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
     if (item.exact) return pathname === item.href;
     return pathname.startsWith(item.href);
   };
+
+  const filteredNavItems = navItems.filter(item => {
+    if (portalRole === 'host') {
+      return item.href === '/rentals' || item.href === '/settings';
+    }
+    return true;
+  });
 
   return (
     <div className="flex h-screen bg-[#020617] overflow-hidden">
@@ -66,7 +89,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
         <SidebarContent
           collapsed={sidebarCollapsed}
           onToggle={toggleSidebar}
-          navItems={navItems}
+          navItems={filteredNavItems}
           isActive={isActive}
           onlineCount={onlineCount}
         />
@@ -85,7 +108,7 @@ export function DashboardLayout({ children }: { children: React.ReactNode }) {
             <SidebarContent
               collapsed={false}
               onToggle={() => setMobileOpen(false)}
-              navItems={navItems}
+              navItems={filteredNavItems}
               isActive={isActive}
               onlineCount={onlineCount}
               isMobile
@@ -327,15 +350,47 @@ function SidebarContent({
 
       {/* Footer */}
       <div className={`p-3 border-t border-slate-800 flex flex-col gap-1.5 ${collapsed ? 'items-center' : ''}`}>
-        <a
-          href="/downloads/ClusterOSAgent.zip"
-          download
-          title="Download Windows Agent (.zip)"
-          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 transition-all duration-200 ${collapsed ? 'justify-center w-10 h-10 p-0' : 'w-full'}`}
-        >
-          <Download className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && <span className="text-xs font-semibold whitespace-nowrap">Download Agent</span>}
-        </a>
+        {collapsed ? (
+          <>
+            <a
+              href="/downloads/ClusterOSAgent.zip"
+              download
+              title="Download Windows PC Agent (.zip)"
+              className="flex items-center justify-center w-10 h-10 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 transition-all duration-200"
+            >
+              <Download className="w-4 h-4 flex-shrink-0" />
+            </a>
+            <a
+              href="/downloads/ClusterOSMobileAgent.zip"
+              download
+              title="Download Android Mobile Agent (.zip)"
+              className="flex items-center justify-center w-10 h-10 rounded-lg text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all duration-200"
+            >
+              <Smartphone className="w-4 h-4 flex-shrink-0" />
+            </a>
+          </>
+        ) : (
+          <>
+            <a
+              href="/downloads/ClusterOSAgent.zip"
+              download
+              title="Download Windows PC Agent (.zip)"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/20 transition-all duration-200 w-full"
+            >
+              <Download className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-semibold whitespace-nowrap">Download Agent (PC)</span>
+            </a>
+            <a
+              href="/downloads/ClusterOSMobileAgent.zip"
+              download
+              title="Download Android Mobile Agent (.zip)"
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-blue-400 bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/20 transition-all duration-200 w-full"
+            >
+              <Smartphone className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs font-semibold whitespace-nowrap">Download Agent (Mobile)</span>
+            </a>
+          </>
+        )}
 
         <button
           onClick={() => signOut(auth)}

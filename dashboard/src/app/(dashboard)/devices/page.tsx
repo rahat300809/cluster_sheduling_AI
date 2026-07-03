@@ -4,11 +4,13 @@ import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import { useAppStore } from '@/store/appStore';
-import { pairDevice, deleteDevice } from '@/lib/db';
-import { consumePairCode } from '@/lib/rtdb';
+import { pairDevice, deleteDevice, addHostBalance } from '@/lib/db';
+import { consumePairCode, stopActiveRentalSessionRTDB } from '@/lib/rtdb';
+import { db } from '@/lib/firebase';
+import { doc, updateDoc, getDocs, collection, query, where } from 'firebase/firestore';
 import {
   Monitor, Plus, Search, Wifi, WifiOff, Cpu, MemoryStick,
-  Thermometer, Zap, MoreVertical, Trash2, Edit2, Link2, Loader2
+  Thermometer, Zap, MoreVertical, Trash2, Edit2, Link2, Loader2, Smartphone
 } from 'lucide-react';
 
 const fadeUp = {
@@ -31,6 +33,63 @@ export default function DevicesPage() {
   const handleDelete = async (deviceDocId: string, deviceName: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+
+    const dev = devices.find(d => d.id === deviceDocId);
+    if (dev && dev.type === 'rental' && dev.ownerId !== user?.uid) {
+      if (!confirm(`Cancel/Stop renting "${deviceName}"?`)) return;
+      setDeletingId(deviceDocId);
+      try {
+        // Find running session for this device
+        const q = query(
+          collection(db, 'rentals'),
+          where('deviceId', '==', dev.deviceId),
+          where('status', '==', 'running')
+        );
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const sessionDoc = snap.docs[0];
+          const sessionData = { id: sessionDoc.id, ...sessionDoc.data() } as any;
+          
+          // Read active session state from RTDB to get the latest elapsed seconds/earnings
+          const { ref, get } = await import('firebase/database');
+          const { rtdb } = await import('@/lib/firebase');
+          const rtdbSnap = await get(ref(rtdb, `devices/${dev.deviceId}/activeRentalSession`));
+          
+          let finalBalance = sessionData.earnedBalance;
+          if (rtdbSnap.exists()) {
+            finalBalance = rtdbSnap.val().earnedBalance || 0;
+          }
+
+          // Pay the host
+          await addHostBalance(sessionData.ownerUserId, finalBalance);
+
+          // Update rental in Firestore
+          await updateDoc(doc(db, 'rentals', sessionData.id), {
+            status: 'completed',
+            endTime: Date.now(),
+            earnedBalance: finalBalance
+          });
+
+          // Delete active session in RTDB
+          await stopActiveRentalSessionRTDB(dev.deviceId, sessionData.id, 'completed');
+        }
+
+        // Unlink renterUserId in Firestore device document
+        await updateDoc(doc(db, 'devices', dev.id), {
+          rentalStatus: 'idle',
+          rentalSessionId: null,
+          renterUserId: null
+        });
+
+        alert('Rented device removed successfully!');
+      } catch (err: any) {
+        alert('Failed to remove rented device: ' + err.message);
+      } finally {
+        setDeletingId(null);
+      }
+      return;
+    }
+
     if (!confirm(`Remove "${deviceName}" from your dashboard?\n\nThe agent will continue running on that PC but will no longer be tracked here.`)) return;
     setDeletingId(deviceDocId);
     try {
@@ -83,6 +142,11 @@ export default function DevicesPage() {
           createdAt: Date.now(),
           lastSeen: Date.now(),
         });
+        
+        // Sync paired state to RTDB so agent knows it is paired
+        const { ref, set } = await import('firebase/database');
+        const { rtdb } = await import('@/lib/firebase');
+        await set(ref(rtdb, `devices/${rtdbDevice.deviceId}/paired`), true);
       }
 
       setPairSuccess(true);
@@ -163,6 +227,8 @@ export default function DevicesPage() {
           {filtered.map((device, i) => {
             const metrics = metricsMap[device.deviceId];
             const online = metrics?.status === 'online';
+            const isMobile = device.deviceId.startsWith('MOB');
+            const DeviceIcon = isMobile ? Smartphone : Monitor;
 
             return (
               <motion.div
@@ -190,7 +256,7 @@ export default function DevicesPage() {
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
                           online ? 'bg-green-500/10 border border-green-500/20' : 'bg-slate-800/60 border border-slate-700/60'
                         }`}>
-                          <Monitor className={`w-5 h-5 ${online ? 'text-green-400' : 'text-slate-500'}`} />
+                          <DeviceIcon className={`w-5 h-5 ${online ? 'text-green-400' : 'text-slate-500'}`} />
                         </div>
                         <div>
                           <div className="font-semibold text-white text-sm">
@@ -291,9 +357,13 @@ export default function DevicesPage() {
                 <div>
                   <h2 className="font-semibold text-white">Add New Device</h2>
                   <p className="text-xs text-slate-400">
-                    Enter the pair code from your agent. Don't have it?{' '}
+                    Enter the pair code from your agent. Don't have it? Download:{' '}
                     <a href="/downloads/ClusterOSAgent.zip" download className="text-green-400 hover:underline">
-                      Download Agent (.zip)
+                      PC Agent (.zip)
+                    </a>
+                    {' | '}
+                    <a href="/downloads/ClusterOSMobileAgent.zip" download className="text-green-400 hover:underline">
+                      Mobile Agent (.zip)
                     </a>
                   </p>
                 </div>

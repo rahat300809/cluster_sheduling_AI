@@ -131,6 +131,31 @@ public class DevicePairingService
         }
     }
 
+    public async Task UnpairAsync()
+    {
+        if (!File.Exists(DeviceConfigFile)) return;
+
+        try
+        {
+            var json = await File.ReadAllTextAsync(DeviceConfigFile);
+            var identity = JsonConvert.DeserializeObject<DeviceIdentity>(json);
+            if (identity == null) return;
+
+            identity.IsPaired = false;
+            identity.IsRegistered = false;
+            identity.OwnerUserId = null;
+            identity.PairCode = GeneratePairCode();
+
+            _cachedIdentity = identity;
+            await SaveIdentityAsync(identity);
+            _logger.LogInformation("Device successfully unpaired locally. New pair code: {PairCode}", identity.PairCode);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to unpair device locally");
+        }
+    }
+
     private static string GenerateShortId()
     {
         return Guid.NewGuid().ToString("N")[..6].ToUpper();

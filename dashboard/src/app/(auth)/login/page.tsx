@@ -9,6 +9,7 @@ import { Network, Cpu, Zap, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-reac
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
+  const [portalRole, setPortalRole] = useState<'developer' | 'host'>('developer');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -27,7 +28,8 @@ export default function LoginPage() {
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
-      router.push('/');
+      localStorage.setItem('portal_role', portalRole);
+      router.push(portalRole === 'host' ? '/rentals' : '/');
     } catch (err: any) {
       let msg = 'Authentication failed';
       if (err && typeof err === 'object' && 'code' in err) {
@@ -119,6 +121,37 @@ export default function LoginPage() {
             >
               Create Account
             </button>
+          </div>
+
+          {/* Portal Role Tabs */}
+          <div className="mb-6">
+            <label className="block text-xs font-bold text-slate-400 mb-2 uppercase tracking-wider text-center">
+              Access Portal As
+            </label>
+            <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPortalRole('developer')}
+                className={`flex-1 py-2.5 text-[11px] font-bold rounded-md transition-all duration-200 ${
+                  portalRole === 'developer'
+                    ? 'bg-green-500 text-black shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                Developer (Workflow Maker)
+              </button>
+              <button
+                type="button"
+                onClick={() => setPortalRole('host')}
+                className={`flex-1 py-2.5 text-[11px] font-bold rounded-md transition-all duration-200 ${
+                  portalRole === 'host'
+                    ? 'bg-green-500 text-black shadow'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                PC Owner (Rental Hoster)
+              </button>
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">

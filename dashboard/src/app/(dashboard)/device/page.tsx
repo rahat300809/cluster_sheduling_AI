@@ -11,7 +11,7 @@ import {
 import {
   Monitor, Cpu, MemoryStick, Zap, HardDrive, Wifi, Thermometer,
   Terminal, Power, RefreshCw, Moon, Lock, Skull, Play, ChevronLeft,
-  Activity, Loader2, Clock, ShieldCheck, Database, Server, Info
+  Activity, Loader2, Clock, ShieldCheck, Database, Server, Info, Battery, Smartphone
 } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -33,6 +33,8 @@ function DeviceDetailContent() {
   const device = devices.find(d => d.deviceId === id);
   const metrics = id ? metricsMap[id] : null;
   const processes = id ? (processesMap[id] || []) : [];
+  const isMobile = device?.deviceId?.startsWith('MOB') || false;
+  const batteryVal = (metrics as any)?.battery;
 
   const [history, setHistory] = useState<MetricHistory[]>([]);
   const [cmdInput, setCmdInput] = useState('');
@@ -43,9 +45,9 @@ function DeviceDetailContent() {
     if (!metrics) return;
     const point: MetricHistory = {
       t: new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      cpu: Number(metrics.cpu.total.toFixed(1)),
-      ram: Number(metrics.ram.usedPercent.toFixed(1)),
-      gpu: Number(metrics.gpu.usagePercent.toFixed(1)),
+      cpu: Number((metrics.cpu?.total ?? 0).toFixed(1)),
+      ram: Number((metrics.ram?.usedPercent ?? 0).toFixed(1)),
+      gpu: Number((metrics.gpu?.usagePercent ?? 0).toFixed(1)),
     };
     setHistory(prev => [...prev.slice(-MAX_HISTORY + 1), point]);
   }, [metrics?.timestamp]);
@@ -117,7 +119,7 @@ function DeviceDetailContent() {
             <ChevronLeft className="w-5 h-5" />
           </button>
           <div className="w-10 h-10 rounded-xl bg-green-500/10 border border-green-500/20 flex items-center justify-center flex-shrink-0">
-            <Monitor className="w-5 h-5 text-green-400" />
+            {isMobile ? <Smartphone className="w-5 h-5 text-green-400" /> : <Monitor className="w-5 h-5 text-green-400" />}
           </div>
           <div>
             <h1 className="text-xl font-bold text-white leading-tight">{device.name || device.machineName}</h1>
@@ -158,18 +160,22 @@ function DeviceDetailContent() {
             </div>
             <div className="min-w-0">
               <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Processor Config</span>
-              <h3 className="text-sm font-semibold text-white truncate mt-0.5">{metrics?.cpu?.name || 'Intel/AMD Processor'}</h3>
-              <p className="text-xs text-slate-400 mt-1">{metrics?.cpu?.cores?.length ?? '8'} Cores / Logical Processors</p>
+              <h3 className="text-sm font-semibold text-white truncate mt-0.5">{metrics?.cpu?.name || (isMobile ? 'Mobile Processor' : 'Intel/AMD Processor')}</h3>
+              <p className="text-xs text-slate-400 mt-1">{metrics?.cpu?.cores?.length || (isMobile ? '8 Cores (ARM v8/v9)' : '8 Cores / Logical Processors')}</p>
             </div>
           </div>
           <div className="glass-card p-4 flex items-start gap-4">
             <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0">
-              <Zap className="w-5 h-5 text-amber-400" />
+              {isMobile ? <Battery className="w-5 h-5 text-green-400" /> : <Zap className="w-5 h-5 text-amber-400" />}
             </div>
             <div className="min-w-0">
-              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Graphics Card Config</span>
-              <h3 className="text-sm font-semibold text-white truncate mt-0.5">{metrics?.gpu?.name || 'Integrated/No Dedicated GPU'}</h3>
-              <p className="text-xs text-slate-400 mt-1">{metrics?.gpu?.memTotal ? `${(metrics.gpu.memTotal / 1024).toFixed(1)} GB VRAM` : 'No dedicated VRAM reported'}</p>
+              <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">{isMobile ? 'Power Configuration' : 'Graphics Card Config'}</span>
+              <h3 className="text-sm font-semibold text-white truncate mt-0.5">
+                {isMobile ? `Battery Level: ${batteryVal ?? '--'}%` : (metrics?.gpu?.name || 'Integrated/No Dedicated GPU')}
+              </h3>
+              <p className="text-xs text-slate-400 mt-1">
+                {isMobile ? 'Operating on battery / charging system' : (metrics?.gpu?.memTotal ? `${(metrics.gpu.memTotal / 1024).toFixed(1)} GB VRAM` : 'No dedicated VRAM reported')}
+              </p>
             </div>
           </div>
         </div>
@@ -178,14 +184,21 @@ function DeviceDetailContent() {
       {/* Metric Cards Grid */}
       {online && metrics && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-          {[
+          {(isMobile ? [
+            { label: 'CPU Usage', value: metrics?.cpu?.total ?? 0, unit: '%', icon: Cpu, color: '#3b82f6' },
+            { label: 'RAM Usage', value: metrics?.ram?.usedPercent ?? 0, unit: '%', icon: MemoryStick, color: '#8b5cf6' },
+            { label: 'Battery Level', value: batteryVal ?? 0, unit: '%', icon: Battery, color: '#22c55e' },
+            { label: 'CPU Temp', value: metrics?.temperatures?.cpu ?? 0, unit: '°C', icon: Thermometer, color: '#ef4444' },
+            { label: 'Ping Latency', value: metrics?.network?.latencyMs ?? 0, unit: 'ms', icon: Wifi, color: '#f59e0b' },
+            { label: 'Uptime', value: metrics?.uptimeSeconds ? (metrics.uptimeSeconds / 60) : 0, unit: 'm', icon: Clock, color: '#ec4899' },
+          ] : [
             { label: 'CPU Usage', value: metrics?.cpu?.total ?? 0, unit: '%', icon: Cpu, color: '#3b82f6' },
             { label: 'RAM Usage', value: metrics?.ram?.usedPercent ?? 0, unit: '%', icon: MemoryStick, color: '#8b5cf6' },
             { label: 'GPU Usage', value: metrics?.gpu?.usagePercent ?? 0, unit: '%', icon: Zap, color: '#f59e0b' },
             { label: 'Disk Space', value: metrics?.disk?.usedPercent ?? 0, unit: '%', icon: HardDrive, color: '#ec4899' },
             { label: 'CPU Temp', value: metrics?.temperatures?.cpu ?? 0, unit: '°C', icon: Thermometer, color: '#ef4444' },
             { label: 'Ping Latency', value: metrics?.network?.latencyMs ?? 0, unit: 'ms', icon: Wifi, color: '#22c55e' },
-          ].map(m => (
+          ]).map(m => (
             <div key={m.label} className="glass-card p-4">
               <div className="flex items-center gap-2 mb-2">
                 <m.icon className="w-3.5 h-3.5" style={{ color: m.color }} />
@@ -215,44 +228,77 @@ function DeviceDetailContent() {
             </div>
           </div>
 
-          {/* Detailed GPU Memory */}
-          <div className="glass-card p-4 space-y-2">
-            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
-              <Zap className="w-3.5 h-3.5" /> Video RAM (VRAM)
-            </h3>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-slate-400">Dedicated VRAM:</span><span className="text-white font-mono">{metrics?.gpu?.memTotal ? `${(metrics.gpu.memTotal / 1024).toFixed(1)} GB` : 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Used VRAM:</span><span className="text-white font-mono">{metrics?.gpu?.memUsed ? `${metrics.gpu.memUsed.toFixed(0)} MB` : 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">VRAM Usage:</span><span className="text-white font-mono">{metrics?.gpu?.memUsedPercent ? `${metrics.gpu.memUsedPercent.toFixed(1)}%` : 'N/A'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">GPU Temp:</span><span className="text-white font-mono">{metrics?.temperatures?.gpu ? `${metrics.temperatures.gpu.toFixed(0)}°C` : 'N/A'}</span></div>
-            </div>
-          </div>
+          {isMobile ? (
+            <>
+              {/* Detailed Battery & Power */}
+              <div className="glass-card p-4 space-y-2">
+                <h3 className="text-xs font-bold text-green-400 uppercase tracking-wider flex items-center gap-2">
+                  <Battery className="w-3.5 h-3.5" /> Power & Battery
+                </h3>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-slate-400">Battery Level:</span><span className="text-white font-mono">{batteryVal ?? '--'}%</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Power Source:</span><span className="text-white font-mono">Battery Power</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">CPU Temperature:</span><span className="text-white font-mono">{metrics?.temperatures?.cpu ?? 0}°C</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Status:</span><span className="text-green-400 font-mono">Good Health</span></div>
+                </div>
+              </div>
 
-          {/* Detailed Disk I/O */}
-          <div className="glass-card p-4 space-y-2">
-            <h3 className="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2">
-              <HardDrive className="w-3.5 h-3.5" /> Disk Performance
-            </h3>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-slate-400">Volume Drive:</span><span className="text-white font-mono">{metrics?.disk?.driveName || 'C:'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Capacity Size:</span><span className="text-white font-mono">{Number(metrics?.disk?.total ?? 0).toFixed(0)} GB</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Read Speed:</span><span className="text-green-400 font-mono">{metrics?.disk?.readMbps ? `${metrics.disk.readMbps.toFixed(2)} MB/s` : '0.00 MB/s'}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Write Speed:</span><span className="text-blue-400 font-mono">{metrics?.disk?.writeMbps ? `${metrics.disk.writeMbps.toFixed(2)} MB/s` : '0.00 MB/s'}</span></div>
-            </div>
-          </div>
+              {/* Hardware specifications */}
+              <div className="glass-card p-4 space-y-2 col-span-1 md:col-span-2">
+                <h3 className="text-xs font-bold text-blue-400 uppercase tracking-wider flex items-center gap-2">
+                  <Info className="w-3.5 h-3.5" /> Mobile Ecosystem Configuration
+                </h3>
+                <p className="text-xs text-slate-400">
+                  This mobile device is running as a workload cluster execution host. Tasks scheduled on the dashboard (such as Python ML training models) will run inside the Mobile Agent.
+                </p>
+                <div className="flex justify-between pt-1 text-[11px] border-t border-slate-900/60">
+                  <span className="text-slate-500">Device ID: <strong className="text-slate-300 font-mono">{device.deviceId}</strong></span>
+                  <span className="text-slate-500">Pair Code: <strong className="text-green-400 font-mono">{device.pairCode}</strong></span>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Detailed GPU Memory */}
+              <div className="glass-card p-4 space-y-2">
+                <h3 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                  <Zap className="w-3.5 h-3.5" /> Video RAM (VRAM)
+                </h3>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-slate-400">Dedicated VRAM:</span><span className="text-white font-mono">{metrics?.gpu?.memTotal ? `${(metrics.gpu.memTotal / 1024).toFixed(1)} GB` : 'N/A'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Used VRAM:</span><span className="text-white font-mono">{metrics?.gpu?.memUsed ? `${metrics.gpu.memUsed.toFixed(0)} MB` : 'N/A'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">VRAM Usage:</span><span className="text-white font-mono">{metrics?.gpu?.memUsedPercent ? `${metrics.gpu.memUsedPercent.toFixed(1)}%` : 'N/A'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">GPU Temp:</span><span className="text-white font-mono">{metrics?.temperatures?.gpu ? `${metrics.temperatures.gpu.toFixed(0)}°C` : 'N/A'}</span></div>
+                </div>
+              </div>
 
-          {/* Detailed Net & Queue */}
-          <div className="glass-card p-4 space-y-2">
-            <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-              <Wifi className="w-3.5 h-3.5" /> Network & Queue
-            </h3>
-            <div className="space-y-1 text-xs">
-              <div className="flex justify-between"><span className="text-slate-400">Download speed:</span><span className="text-white font-mono">{Number(metrics?.network?.downloadMbps ?? 0).toFixed(2)} Mbps</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Upload speed:</span><span className="text-white font-mono">{Number(metrics?.network?.uploadMbps ?? 0).toFixed(2)} Mbps</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">Running Tasks:</span><span className="text-white font-mono">{metrics?.runningTasks ?? 0}</span></div>
-              <div className="flex justify-between"><span className="text-slate-400">System Uptime:</span><span className="text-white font-mono">{formatUptime(metrics?.uptimeSeconds)}</span></div>
-            </div>
-          </div>
+              {/* Detailed Disk I/O */}
+              <div className="glass-card p-4 space-y-2">
+                <h3 className="text-xs font-bold text-pink-400 uppercase tracking-wider flex items-center gap-2">
+                  <HardDrive className="w-3.5 h-3.5" /> Disk Performance
+                </h3>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-slate-400">Volume Drive:</span><span className="text-white font-mono">{metrics?.disk?.driveName || 'C:'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Capacity Size:</span><span className="text-white font-mono">{Number(metrics?.disk?.total ?? 0).toFixed(0)} GB</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Read Speed:</span><span className="text-green-400 font-mono">{metrics?.disk?.readMbps ? `${metrics.disk.readMbps.toFixed(2)} MB/s` : '0.00 MB/s'}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Write Speed:</span><span className="text-blue-400 font-mono">{metrics?.disk?.writeMbps ? `${metrics.disk.writeMbps.toFixed(2)} MB/s` : '0.00 MB/s'}</span></div>
+                </div>
+              </div>
+
+              {/* Detailed Net & Queue */}
+              <div className="glass-card p-4 space-y-2">
+                <h3 className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                  <Wifi className="w-3.5 h-3.5" /> Network & Queue
+                </h3>
+                <div className="space-y-1 text-xs">
+                  <div className="flex justify-between"><span className="text-slate-400">Download speed:</span><span className="text-white font-mono">{Number(metrics?.network?.downloadMbps ?? 0).toFixed(2)} Mbps</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Upload speed:</span><span className="text-white font-mono">{Number(metrics?.network?.uploadMbps ?? 0).toFixed(2)} Mbps</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">Running Tasks:</span><span className="text-white font-mono">{metrics?.runningTasks ?? 0}</span></div>
+                  <div className="flex justify-between"><span className="text-slate-400">System Uptime:</span><span className="text-white font-mono">{formatUptime(metrics?.uptimeSeconds)}</span></div>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -307,8 +353,8 @@ function DeviceDetailContent() {
                     <div className="text-xs text-slate-500">PID {proc.pid}</div>
                   </div>
                   <div className="flex gap-3 text-xs font-mono text-slate-400 flex-shrink-0">
-                    <span className="w-10 text-right">{proc.cpuPercent.toFixed(1)}%</span>
-                    <span className="w-14 text-right">{proc.ramMB}MB</span>
+                    <span className="w-10 text-right">{Number(proc.cpuPercent ?? (proc as any).cpu ?? 0).toFixed(1)}%</span>
+                    <span className="w-14 text-right">{Number(proc.ramMB ?? (proc as any).ram ?? 0).toFixed(0)}MB</span>
                   </div>
                   <button onClick={() => handleCommand('kill_process', { pid: proc.pid })} className="opacity-0 group-hover:opacity-100 p-1.5 text-red-400 hover:bg-red-500/10 rounded transition-all flex-shrink-0" title="Kill process">
                     <Skull className="w-3.5 h-3.5" />

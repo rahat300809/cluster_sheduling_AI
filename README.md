@@ -63,34 +63,69 @@ ClusterOS is a production-grade distributed monitoring system with two component
 
 ---
 
-## Architecture
+## System Architecture & Workflow Proposal
 
+### High-Level System Overview
+
+```mermaid
+graph TD
+    User["👤 Dashboard User"]
+    Dashboard["🌐 Next.js Web Dashboard"]
+    Firebase["☁️ Firebase Cloud (Firestore & Realtime DB)"]
+    Agent["🖥️ ClusterOS Windows Agent"]
+    OS["💻 Host Operating System"]
+
+    %% Flow 1: Device Pairing
+    User -->|1. Enters Pair Code| Dashboard
+    Dashboard -->|2. Validates & Claims| Firebase
+    Agent -->|3. Publishes Pair Code| Firebase
+    Firebase -->|4. Acknowledges Pairing| Agent
+
+    %% Flow 2: Live Metrics
+    Agent -->|5. Collects & Streams System Metrics| Firebase
+    Firebase -->|6. Pushes Real-Time Updates| Dashboard
+    Dashboard -->|7. Displays Live Charts & Gauges| User
+
+    %% Flow 3: Remote Operations & Jobs
+    User -->|8. Submits Job or Command| Dashboard
+    Dashboard -->|9. Dispatches Execution Task| Firebase
+    Agent -->|10. Pulls Pending Tasks| Firebase
+    Agent -->|11. Executes Operations| OS
+    OS -->|12. Returns Logs & Exit Status| Agent
+    Agent -->|13. Streams Logs & Results| Firebase
+    Firebase -->|14. Shows Output & Completion| Dashboard
 ```
-┌─────────────────────────────────────────────────────┐
-│                  ClusterOS Dashboard                 │
-│            (Next.js 15 — Firebase Hosted)           │
-└──────────────────────┬──────────────────────────────┘
-                       │
-              Firebase Services
-          ┌────────────┴────────────┐
-          │                         │
-   Firestore (persistent)    Realtime Database (live)
-   - Users                   - Device metrics (5s)
-   - Devices                 - Process list
-   - Clusters                - Pending commands
-   - Jobs                    - Command results
-   - Commands                - Pair codes
-          │                         │
-          └────────────┬────────────┘
-                       │
-┌──────────────────────▼──────────────────────────────┐
-│               ClusterOS Agent (Windows EXE)          │
-│                   C# / .NET 9                        │
-│  - LibreHardwareMonitor (CPU/GPU/temps)              │
-│  - Windows Service (auto-start)                      │
-│  - Polls RTDB for commands every 2s                  │
-└─────────────────────────────────────────────────────┘
-```
+
+### End-to-End System Workflow
+
+This proposal details the core workflows linking the Web Dashboard, Firebase, and Windows Agent. Each sequence functions autonomously to ensure zero-configuration setup, real-time telemetry, and secure command execution.
+
+#### 1. Device Handshake & Pairing Workflow
+The pairing flow establishes a secure link between a new physical machine and a user account without manual credential sharing:
+1. **Agent Setup**: Upon starting, the Windows Agent generates a unique, persistent hardware footprint and a random 6-character single-use pairing code. It uploads this pairing code to the Realtime Database with a status of `waiting`.
+2. **Dashboard Pairing**: The authenticated user opens the dashboard, enters the pairing code, and submits.
+3. **Database Handshake**: The database validates the pairing code, claims it, and associates the device with the user's account in Firestore. The single-use pairing code is immediately deleted.
+4. **Agent Activation**: The agent detects the code consumption, saves the user configuration locally, and transitions from pairing mode to telemetry mode.
+
+#### 2. Real-Time Telemetry & Process Pipeline
+Telemetry flows continuously to provide live monitoring with low latency and minimal system overhead:
+1. **Metrics Collection**: The Windows Agent queries system sensors (CPU, RAM, GPU, Disk, Network) and live process utilization metrics.
+2. **Database Streaming**: Metrics are streamed to the Realtime Database every 5 seconds.
+3. **Real-time UI Sync**: Next.js dashboard instances subscribed to the Realtime Database endpoints receive instantaneous UI data-binding updates, showing live graphs, heatmaps, and running process tables.
+
+#### 3. Remote Operations & Command Pipeline
+Command routing allows responsive execution of administrative tasks (e.g., shutdown, process killing, run scripts) on remote devices:
+1. **Command Issuance**: The user triggers an action or writes a script on the dashboard.
+2. **Job Queueing**: The dashboard registers the command in Firestore (for historical logging) and pushes a lightweight task request to the Realtime Database.
+3. **Agent Polling & Execution**: The Windows Agent polls the command queue every 2 seconds. When it reads a command payload, it launches the targeted action locally, redirecting system outputs (stdout/stderr) as needed.
+4. **Result Reporting**: The Agent streams output streams and final exit codes back to the Realtime Database, which propagates instantly to the dashboard terminal/console.
+
+#### 4. Intelligent Workload & Job Scheduling (Cluster Dispatcher)
+When deploying automation scripts to groups of machines:
+1. **Script Composition**: The user edits scripts in the Monaco-powered IDE on the dashboard.
+2. **Resource Load Assessment**: The scheduler queries live metrics (CPU/RAM/GPU) from all active nodes in the target cluster.
+3. **Least-Loaded Routing**: An intelligent load-balancing algorithm automatically assigns the execution task to the node currently reporting the lowest resource usage.
+4. **Deployment & Tracking**: The job is dispatched, and progress alerts are streamed to the cluster analytics interface.
 
 ---
 

@@ -33,11 +33,13 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       // Device registration: allow any authenticated user to create
       allow create: if isAuthenticated();
-      // Only owner can update (rename, etc.)
+      // Only owner can update (rename, etc.) or any authenticated user updating rental states
       allow update: if isAuthenticated() && (
         request.auth.uid == resource.data.ownerId ||
         // Allow pairing update (ownerId is being set)
-        resource.data.paired == false
+        resource.data.paired == false ||
+        // Allow renting update
+        request.resource.data.diff(resource.data).affectedKeys().hasAny(['rentalStatus', 'rentalSessionId', 'rentalCode', 'lastSeen', 'renterUserId'])
       );
       // Only owner can delete
       allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
@@ -65,6 +67,14 @@ service cloud.firestore {
       allow create: if isAuthenticated();
       allow update: if isAuthenticated() && isOwner(resource.data.issuedBy);
       allow delete: if isAuthenticated() && isOwner(resource.data.issuedBy);
+    }
+
+    // ─── Rentals ────────────────────────────────────────────────────────────
+    match /rentals/{rentalId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
   }
 }

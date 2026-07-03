@@ -165,6 +165,22 @@ public class RealtimeDbClient
         }
     }
 
+    public async Task<bool> CheckDevicePairedAsync(string deviceId)
+    {
+        try
+        {
+            var response = await GetAsync($"/devices/{deviceId}/paired.json");
+            if (string.IsNullOrWhiteSpace(response) || response.Trim() == "null")
+                return false;
+            return response.Trim().ToLower() == "true";
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check if device is paired in RTDB");
+            return false;
+        }
+    }
+
     // ─── Private HTTP helpers ────────────────────────────────────────────────
 
     private async Task<string> GetAsync(string path)

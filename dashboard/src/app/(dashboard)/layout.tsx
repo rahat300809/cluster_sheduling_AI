@@ -2,12 +2,14 @@
 
 import { useEffect, useRef } from 'react';
 import { useAppStore } from '@/store/appStore';
-import { subscribeDevices, subscribeClusters, subscribeJobs, subscribeCommands } from '@/lib/db';
+import { subscribeDevices, subscribeClusters, subscribeJobs, subscribeCommands, subscribeUserRentals } from '@/lib/db';
 import { subscribeDeviceMetrics, subscribeDeviceProcesses } from '@/lib/rtdb';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2 } from 'lucide-react';
-import type { SystemSnapshot } from '@/types';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import type { SystemSnapshot, Device } from '@/types';
 
 // How long (ms) without a metrics update before we consider a device offline.
 // Metrics are published every 5s; give 3× headroom = 15s.
@@ -27,8 +29,63 @@ export default function DashboardRootLayout({
   useEffect(() => {
     if (!appUser) return;
 
+    let firestoreDevices: Device[] = [];
+    let rentedDevices: Device[] = [];
+    let rentedUnsubs: (() => void)[] = [];
+
+    const updateMergedDevices = () => {
+      const merged = [...firestoreDevices];
+      rentedDevices.forEach(rd => {
+        if (!merged.some(md => md.deviceId === rd.deviceId)) {
+          merged.push(rd);
+        }
+      });
+      setDevices(merged);
+    };
+
+    // 1. Subscribe to owned devices
     const unsubDevices = subscribeDevices(appUser.uid, (updatedDevices) => {
-      setDevices(updatedDevices);
+      firestoreDevices = updatedDevices;
+      updateMergedDevices();
+    });
+
+    // 2. Subscribe to active running rentals to fetch rented devices
+    const unsubRentals = subscribeUserRentals(appUser.uid, 'renter', (sessions) => {
+      rentedUnsubs.forEach(unsub => unsub());
+      rentedUnsubs = [];
+      rentedDevices = [];
+
+      const activeSessions = sessions.filter(s => s.status === 'running');
+      if (activeSessions.length === 0) {
+        updateMergedDevices();
+        return;
+      }
+
+      let loadedCount = 0;
+      activeSessions.forEach(session => {
+        const unsubDeviceDoc = onSnapshot(doc(db, 'devices', session.deviceId), (snap) => {
+          if (snap.exists()) {
+            const devData = { id: snap.id, ...snap.data() } as Device;
+            const idx = rentedDevices.findIndex(rd => rd.deviceId === devData.deviceId);
+            if (idx >= 0) {
+              rentedDevices[idx] = devData;
+            } else {
+              rentedDevices.push(devData);
+            }
+          }
+          loadedCount++;
+          if (loadedCount >= activeSessions.length) {
+            updateMergedDevices();
+          }
+        }, (err) => {
+          console.error("Failed to subscribe to rented device doc:", err);
+          loadedCount++;
+          if (loadedCount >= activeSessions.length) {
+            updateMergedDevices();
+          }
+        });
+        rentedUnsubs.push(unsubDeviceDoc);
+      });
     });
 
     const unsubClusters = subscribeClusters(appUser.uid, setClusters);
@@ -37,6 +94,8 @@ export default function DashboardRootLayout({
 
     return () => {
       unsubDevices();
+      unsubRentals();
+      rentedUnsubs.forEach(unsub => unsub());
       unsubClusters();
       unsubJobs();
       unsubCommands();

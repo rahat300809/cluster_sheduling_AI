@@ -81,18 +81,20 @@ public class MainForm : Form
         {
             if (_activePopup == null || _activePopup.IsDisposed)
             {
-                _activePopup = new ClusterRunningPopup();
+                var identity = _pairingService.CurrentIdentity;
+                var deviceName = identity?.DeviceId ?? "This PC";
+                _activePopup = new ClusterRunningPopup(deviceName);
                 _activePopup.Show();
             }
 
             _notifyIcon.ShowBalloonTip(
                 10_000,
-                "⚡ ClusterOS — Task Running",
-                $"A remote workload is now executing on this PC.\n\n⚠ Please do NOT power off or restart during execution!",
+                "⚡ ClusterOS — Script Executing",
+                $"A remote script is now running on this PC.\n⚠ DO NOT power off or restart during execution!",
                 ToolTipIcon.Warning);
 
-            // Also update status bar text
-            _lblStatusText.Text = "⚡ Running remote job — Do NOT power off!";
+            // Update status bar text
+            _lblStatusText.Text = "⚡ Executing remote script — DO NOT power off!";
             _lblStatusText.ForeColor = Color.FromArgb(251, 191, 36); // Amber
             _statusDot.BackColor = Color.FromArgb(245, 158, 11);
         });
@@ -110,15 +112,16 @@ public class MainForm : Form
 
             _notifyIcon.ShowBalloonTip(
                 5_000,
-                success ? "✅ ClusterOS — Task Complete" : "❌ ClusterOS — Task Failed",
+                success ? "✅ ClusterOS — Script Complete" : "❌ ClusterOS — Script Failed",
                 success
-                    ? "Remote workload finished successfully. Safe to power off."
-                    : "Remote workload encountered an error. Check the dashboard for details.",
+                    ? "Remote script finished successfully. Safe to power off."
+                    : "Remote script encountered an error. Check the dashboard for details.",
                 success ? ToolTipIcon.Info : ToolTipIcon.Error);
 
             // Restore normal status
             _lblStatusText.Text = "Connected to Firebase RTDB • Streaming metrics";
             _lblStatusText.ForeColor = Color.FromArgb(187, 247, 208);
+            _statusDot.BackColor = Color.FromArgb(34, 197, 94);
         });
     }
 
@@ -572,59 +575,141 @@ public class MainForm : Form
 public class ClusterRunningPopup : Form
 {
     private System.Windows.Forms.Timer _blinkTimer = null!;
-    private Label _lblWarning = null!;
+    private System.Windows.Forms.Timer _clockTimer = null!;
+    private Label _lblHeader = null!;
+    private Label _lblDevice = null!;
+    private Label _lblElapsed = null!;
+    private Panel _pulseDot = null!;
     private bool _blinkState = false;
+    private readonly DateTime _startTime = DateTime.Now;
 
-    public ClusterRunningPopup()
+    public ClusterRunningPopup(string deviceName = "This PC")
     {
         this.FormBorderStyle = FormBorderStyle.None;
-        this.Size = new Size(320, 100);
-        this.BackColor = Color.FromArgb(22, 28, 45); // matching deep dark theme
-        this.ShowInTaskbar = false;
+        this.Size = new Size(400, 160);
+        this.BackColor = Color.FromArgb(10, 14, 26);
+        this.ShowInTaskbar = true;
         this.TopMost = true;
         this.StartPosition = FormStartPosition.Manual;
 
-        // Custom borders
+        // Red border
         this.Paint += (s, e) =>
         {
-            using var pen = new Pen(Color.FromArgb(239, 68, 68), 3); // Orange/Red border
+            using var pen = new Pen(Color.FromArgb(239, 68, 68), 2);
             e.Graphics.DrawRectangle(pen, 1, 1, this.Width - 2, this.Height - 2);
         };
 
-        _lblWarning = new Label
+        // ── Pulsing dot ────────────────────────────────────────────────────
+        _pulseDot = new Panel
         {
-            Text = "⚠️ WARNING: CLUSTER JOB ACTIVE",
-            ForeColor = Color.FromArgb(239, 68, 68), // Red
-            Font = new Font("Segoe UI", 10F, FontStyle.Bold),
-            Location = new Point(16, 16),
+            Size = new Size(14, 14),
+            Location = new Point(16, 18),
+            BackColor = Color.FromArgb(239, 68, 68)
+        };
+        _pulseDot.Paint += (s, e) =>
+        {
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using var brush = new SolidBrush(_pulseDot.BackColor);
+            e.Graphics.FillEllipse(brush, 0, 0, _pulseDot.Width - 1, _pulseDot.Height - 1);
+        };
+
+        // ── Header: SCRIPT EXECUTING ──────────────────────────────────────
+        _lblHeader = new Label
+        {
+            Text = "⚡  SCRIPT EXECUTING",
+            ForeColor = Color.FromArgb(239, 68, 68),
+            Font = new Font("Segoe UI", 12F, FontStyle.Bold),
+            Location = new Point(36, 12),
             AutoSize = true
         };
 
-        var lblDesc = new Label
+        // ── Device name ───────────────────────────────────────────────────
+        _lblDevice = new Label
         {
-            Text = "This PC is actively running a cluster workload.\nDO NOT POWER OFF OR RESTART!",
-            ForeColor = Color.FromArgb(243, 244, 246),
+            Text = $"Device:  {deviceName}",
+            ForeColor = Color.FromArgb(148, 163, 184),
             Font = new Font("Segoe UI", 9F, FontStyle.Regular),
-            Location = new Point(16, 44),
-            Size = new Size(288, 40)
+            Location = new Point(16, 46),
+            AutoSize = true
         };
 
-        this.Controls.Add(_lblWarning);
-        this.Controls.Add(lblDesc);
+        // ── Separator line ────────────────────────────────────────────────
+        var sep = new Panel
+        {
+            Size = new Size(this.Width - 32, 1),
+            Location = new Point(16, 72),
+            BackColor = Color.FromArgb(30, 41, 59)
+        };
+
+        // ── Warning ───────────────────────────────────────────────────────
+        var lblWarn = new Label
+        {
+            Text = "⚠  DO NOT SHUT DOWN OR RESTART THIS PC",
+            ForeColor = Color.FromArgb(251, 191, 36),
+            Font = new Font("Segoe UI", 9F, FontStyle.Bold),
+            Location = new Point(16, 84),
+            AutoSize = true
+        };
+
+        // ── Elapsed time ──────────────────────────────────────────────────
+        _lblElapsed = new Label
+        {
+            Text = "Running: 0s",
+            ForeColor = Color.FromArgb(100, 116, 139),
+            Font = new Font("Segoe UI", 8F, FontStyle.Regular),
+            Location = new Point(16, 126),
+            AutoSize = true
+        };
+
+        // ── Status indicator ──────────────────────────────────────────────
+        var lblStatus = new Label
+        {
+            Text = "ClusterOS Agent",
+            ForeColor = Color.FromArgb(71, 85, 105),
+            Font = new Font("Segoe UI", 8F, FontStyle.Regular),
+            Location = new Point(this.Width - 110, 126),
+            AutoSize = true
+        };
+
+        this.Controls.Add(_pulseDot);
+        this.Controls.Add(_lblHeader);
+        this.Controls.Add(_lblDevice);
+        this.Controls.Add(sep);
+        this.Controls.Add(lblWarn);
+        this.Controls.Add(_lblElapsed);
+        this.Controls.Add(lblStatus);
 
         // Position bottom-right of screen
         var screen = Screen.PrimaryScreen;
         var area = screen != null ? screen.WorkingArea : new Rectangle(0, 0, 1024, 768);
         this.Location = new Point(area.Right - this.Width - 20, area.Bottom - this.Height - 20);
 
-        // Blinking timer for the header text
-        _blinkTimer = new System.Windows.Forms.Timer { Interval = 750 };
+        // Blinking timer — pulse the dot and header color
+        _blinkTimer = new System.Windows.Forms.Timer { Interval = 600 };
         _blinkTimer.Tick += (s, e) =>
         {
             _blinkState = !_blinkState;
-            _lblWarning.ForeColor = _blinkState ? Color.FromArgb(239, 68, 68) : Color.FromArgb(245, 158, 11); // toggle Red / Amber
+            _lblHeader.ForeColor = _blinkState
+                ? Color.FromArgb(239, 68, 68)
+                : Color.FromArgb(245, 158, 11);
+            _pulseDot.BackColor = _blinkState
+                ? Color.FromArgb(239, 68, 68)
+                : Color.FromArgb(245, 158, 11);
+            _pulseDot.Invalidate();
         };
         _blinkTimer.Start();
+
+        // Clock timer — update elapsed time
+        _clockTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+        _clockTimer.Tick += (s, e) =>
+        {
+            var elapsed = DateTime.Now - _startTime;
+            if (elapsed.TotalMinutes >= 1)
+                _lblElapsed.Text = $"Running: {(int)elapsed.TotalMinutes}m {elapsed.Seconds}s";
+            else
+                _lblElapsed.Text = $"Running: {(int)elapsed.TotalSeconds}s";
+        };
+        _clockTimer.Start();
     }
 
     protected override void Dispose(bool disposing)
@@ -632,6 +717,7 @@ public class ClusterRunningPopup : Form
         if (disposing)
         {
             _blinkTimer?.Dispose();
+            _clockTimer?.Dispose();
         }
         base.Dispose(disposing);
     }

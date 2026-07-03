@@ -19,6 +19,7 @@ import {
   Settings2, Activity, Trophy, BarChart2
 } from 'lucide-react';
 import { format } from 'date-fns';
+import { useAuth } from '@/hooks/useAuth';
 import type { Job, SchedulerWeights, SchedulerDecision } from '@/types';
 
 interface OutputLine { idx: number; text: string; ts: number; }
@@ -72,7 +73,9 @@ const STATUS_STYLE: Record<string, { bg: string; text: string; icon: typeof Chec
 };
 
 export default function JobsPage() {
+  const { user: authUser } = useAuth();
   const { jobs, devices, clusters, metricsMap, user } = useAppStore();
+  const ownerId = user?.uid ?? authUser?.uid ?? null;
 
   // ─── Derived ──────────────────────────────────────────────────────────────
   const onlineDevices = devices.filter(d => metricsMap[d.deviceId]?.status === 'online');
@@ -147,11 +150,15 @@ export default function JobsPage() {
     saveWeights(w);
   }, []);
 
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  const terminalScrollRef = useRef<HTMLDivElement>(null);
   const outputUnsubRef = useRef<(() => void) | null>(null);
   const commandUnsubsRef = useRef<Record<string, (() => void)[]>>({});
 
-  useEffect(() => { terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [activeConsoleLines]);
+  useEffect(() => {
+    if (terminalScrollRef.current) {
+      terminalScrollRef.current.scrollTop = terminalScrollRef.current.scrollHeight;
+    }
+  }, [activeConsoleLines]);
 
   useEffect(() => {
     if (outputUnsubRef.current) { outputUnsubRef.current(); outputUnsubRef.current = null; }
@@ -171,8 +178,9 @@ export default function JobsPage() {
     const cmdId = `job_${jobId}_${deviceId}`;
     const dev = devices.find(x => x.deviceId === deviceId);
     const devName = dev?.name || dev?.machineName || deviceId;
-    if (user) await createCommandRecord(cmdId, deviceId, devName, 'run_script', { script: code, forceWork }, user.uid);
+    if (ownerId) await createCommandRecord(cmdId, deviceId, devName, 'run_script', { script: code, forceWork }, ownerId);
     await dispatchCommandToDevice(deviceId, cmdId, 'run_script', { script: code, forceWork });
+    await updateJobStatus(jobId, 'running');
 
     const timeoutTimer = setTimeout(async () => {
       unsubResult();
@@ -199,9 +207,18 @@ export default function JobsPage() {
 
   // ─── Main Run Handler ─────────────────────────────────────────────────────
   const handleRun = async () => {
-    if (!user) return;
+    if (!ownerId) {
+      alert('You must be signed in to run workloads. Please refresh and log in again.');
+      return;
+    }
     const tab = activeTab;
     const tabId = tab.id;
+
+    // Validate before showing loader
+    if (tab.mode === 'dedicated' && !tab.targetDeviceId) {
+      alert('Please select a target device.');
+      return;
+    }
 
     if (commandUnsubsRef.current[tabId]) {
       commandUnsubsRef.current[tabId].forEach(fn => fn());
@@ -210,112 +227,98 @@ export default function JobsPage() {
 
     setIsAnalyzing(true);
     try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    } finally {
-      setIsAnalyzing(false);
-    }
+      let targetDeviceIds: string[] = [];
+      let label = '';
+      let schedulerDecision: SchedulerDecision | null = null;
 
-    let targetDeviceIds: string[] = [];
-    let label = '';
-    let schedulerDecision: SchedulerDecision | null = null;
+      if (tab.mode === 'dedicated') {
+        targetDeviceIds = [tab.targetDeviceId];
+        const d = devices.find(x => x.deviceId === tab.targetDeviceId);
+        label = d?.name || d?.machineName || tab.targetDeviceId;
 
-    if (tab.mode === 'dedicated') {
-      if (!tab.targetDeviceId) { alert('Please select a target device.'); return; }
-      targetDeviceIds = [tab.targetDeviceId];
-      const d = devices.find(x => x.deviceId === tab.targetDeviceId);
-      label = d?.name || d?.machineName || tab.targetDeviceId;
+        const poolDeviceIds = tab.targetClusterId
+          ? clusters.find(c => c.id === tab.targetClusterId)?.deviceIds
+          : undefined;
 
-      // Run scheduler on all nodes in the cluster or pool to get comparison details
-      const poolDeviceIds = tab.targetClusterId
-        ? clusters.find(c => c.id === tab.targetClusterId)?.deviceIds
-        : undefined;
-
-      const fullDecision = runScheduler(
-        devices,
-        metricsMap,
-        poolDeviceIds,
-        schedulerWeights
-      );
-
-      if (fullDecision) {
-        const selectedNode = fullDecision.rankedNodes.find(n => n.deviceId === tab.targetDeviceId) 
-          || fullDecision.eliminatedNodes.find(n => n.deviceId === tab.targetDeviceId);
-        
-        // Move the selected node to the front of rankedNodes if it is not eliminated
-        let newRanked = [...fullDecision.rankedNodes];
-        if (selectedNode && !selectedNode.eliminated) {
-          newRanked = [
-            selectedNode,
-            ...fullDecision.rankedNodes.filter(n => n.deviceId !== tab.targetDeviceId)
-          ];
-        }
-
-        schedulerDecision = {
-          ...fullDecision,
-          selectedDeviceId: tab.targetDeviceId,
-          selectedDeviceName: label,
-          finalScore: selectedNode ? selectedNode.finalScore : 0,
-          rankedNodes: newRanked,
-          routingReason: `Manual dedicated routing. User explicitly selected node: ${label}.`,
-          positiveFacts: ['User manually selected this node for dedicated execution.'],
-        };
-      } else {
-        // Build a minimal decision if no nodes are evaluated at all
-        schedulerDecision = {
-          timestamp: Date.now(),
-          selectedDeviceId: tab.targetDeviceId,
-          selectedDeviceName: label,
-          finalScore: 0,
-          rank: 1,
-          totalConsidered: 1,
-          confidence: 100,
-          routingReason: `Manual dedicated routing. User explicitly selected node: ${label}.`,
-          positiveFacts: ['User manually selected this node for dedicated execution.'],
-          tiebroken: false,
-          weights: schedulerWeights,
-          rankedNodes: [],
-          eliminatedNodes: [],
-          expectedCompletionMinutes: 10,
-        };
-      }
-    } else {
-      // Cluster mode
-      const cluster = clusters.find(c => c.id === tab.targetClusterId);
-      const clusterDeviceIds = cluster?.deviceIds ?? [];
-      const poolIds = clusterDeviceIds.length > 0 ? clusterDeviceIds : undefined;
-
-      if (tab.parallel && (clusterDeviceIds.length > 0 || devices.length > 0)) {
-        // Parallel: dispatch to all online nodes in pool
-        const onlinePool = devices.filter(d =>
-          (poolIds ? poolIds.includes(d.deviceId) : true) &&
-          metricsMap[d.deviceId]?.status === 'online'
+        const fullDecision = runScheduler(
+          devices,
+          metricsMap,
+          poolDeviceIds,
+          schedulerWeights
         );
-        targetDeviceIds = onlinePool.map(d => d.deviceId);
-        label = `${cluster?.name ?? 'Cluster'} — ${targetDeviceIds.length} nodes parallel`;
 
-        // Generate scheduler report for the best node (for reference)
-        schedulerDecision = runScheduler(devices, metricsMap, poolIds, schedulerWeights);
-        if (schedulerDecision) {
+        if (fullDecision) {
+          const selectedNode = fullDecision.rankedNodes.find(n => n.deviceId === tab.targetDeviceId)
+            || fullDecision.eliminatedNodes.find(n => n.deviceId === tab.targetDeviceId);
+
+          let newRanked = [...fullDecision.rankedNodes];
+          if (selectedNode && !selectedNode.eliminated) {
+            newRanked = [
+              selectedNode,
+              ...fullDecision.rankedNodes.filter(n => n.deviceId !== tab.targetDeviceId)
+            ];
+          }
+
           schedulerDecision = {
-            ...schedulerDecision,
-            routingReason: `Parallel group execution mode. Workload dispatched simultaneously to all ${targetDeviceIds.length} online nodes in ${cluster?.name ?? 'the cluster'}. ${schedulerDecision.routingReason}`,
+            ...fullDecision,
+            selectedDeviceId: tab.targetDeviceId,
+            selectedDeviceName: label,
+            finalScore: selectedNode ? selectedNode.finalScore : 0,
+            rankedNodes: newRanked,
+            routingReason: `Manual dedicated routing. User explicitly selected node: ${label}.`,
+            positiveFacts: ['User manually selected this node for dedicated execution.'],
+          };
+        } else {
+          schedulerDecision = {
+            timestamp: Date.now(),
+            selectedDeviceId: tab.targetDeviceId,
+            selectedDeviceName: label,
+            finalScore: 0,
+            rank: 1,
+            totalConsidered: 1,
+            confidence: 100,
+            routingReason: `Manual dedicated routing. User explicitly selected node: ${label}.`,
+            positiveFacts: ['User manually selected this node for dedicated execution.'],
+            tiebroken: false,
+            weights: schedulerWeights,
+            rankedNodes: [],
+            eliminatedNodes: [],
+            expectedCompletionMinutes: 10,
           };
         }
       } else {
-        // Smart single node selection
-        schedulerDecision = runScheduler(devices, metricsMap, poolIds, schedulerWeights);
-        if (!schedulerDecision) { alert('No healthy nodes found. Ensure the agent is running and nodes are online.'); return; }
-        targetDeviceIds = [schedulerDecision.selectedDeviceId];
-        label = `${schedulerDecision.selectedDeviceName} (auto — score ${schedulerDecision.finalScore.toFixed(1)})`;
+        const cluster = clusters.find(c => c.id === tab.targetClusterId);
+        const clusterDeviceIds = cluster?.deviceIds ?? [];
+        const poolIds = clusterDeviceIds.length > 0 ? clusterDeviceIds : undefined;
+
+        if (tab.parallel && (clusterDeviceIds.length > 0 || devices.length > 0)) {
+          const onlinePool = devices.filter(d =>
+            (poolIds ? poolIds.includes(d.deviceId) : true) &&
+            metricsMap[d.deviceId]?.status === 'online'
+          );
+          targetDeviceIds = onlinePool.map(d => d.deviceId);
+          label = `${cluster?.name ?? 'Cluster'} — ${targetDeviceIds.length} nodes parallel`;
+
+          schedulerDecision = runScheduler(devices, metricsMap, poolIds, schedulerWeights);
+          if (schedulerDecision) {
+            schedulerDecision = {
+              ...schedulerDecision,
+              routingReason: `Parallel group execution mode. Workload dispatched simultaneously to all ${targetDeviceIds.length} online nodes in ${cluster?.name ?? 'the cluster'}. ${schedulerDecision.routingReason}`,
+            };
+          }
+        } else {
+          schedulerDecision = runScheduler(devices, metricsMap, poolIds, schedulerWeights);
+          if (!schedulerDecision) { alert('No healthy nodes found. Ensure the agent is running and nodes are online.'); return; }
+          targetDeviceIds = [schedulerDecision.selectedDeviceId];
+          label = `${schedulerDecision.selectedDeviceName} (auto — score ${schedulerDecision.finalScore.toFixed(1)})`;
+        }
       }
-    }
 
-    if (targetDeviceIds.length === 0) { alert('No online target devices found.'); return; }
+      if (targetDeviceIds.length === 0) { alert('No online target devices found.'); return; }
 
-    setRunningTabs(prev => new Set(prev).add(tabId));
-    setTargetDeviceNames(prev => ({ ...prev, [tabId]: label }));
+      setRunningTabs(prev => new Set(prev).add(tabId));
+      setTargetDeviceNames(prev => ({ ...prev, [tabId]: label }));
 
-    try {
       const finalDecision = schedulerDecision ?? {
         timestamp: Date.now(),
         selectedDeviceId: targetDeviceIds[0],
@@ -334,7 +337,7 @@ export default function JobsPage() {
           deviceName: d.name || d.machineName,
           cpuUsage: 0, ramUsage: 0, gpuUsage: 0, cpuTemp: 0, gpuTemp: 0, latencyMs: 0, runningTasks: 0, waitingTasks: 0, diskUsage: 0, successRate: 80, batteryPercent: null, powerPluggedIn: null, uptimeHours: 0, diskReadMbps: 0, diskWriteMbps: 0, downloadMbps: 0, uploadMbps: 0,
           cpuScore: 0, ramScore: 0, gpuScore: 0, temperatureScore: 0, networkScore: 0, queueScore: 0, reliabilityScore: 0, diskScore: 0, finalScore: 0, averagePerformance: 0,
-          status: 'offline', healthStatus: 'critical', eliminated: true, eliminationReason: 'Node is offline'
+          status: 'offline' as const, healthStatus: 'critical', eliminated: true, eliminationReason: 'Node is offline'
         })),
       };
 
@@ -344,7 +347,7 @@ export default function JobsPage() {
         script: tab.code,
         targetDeviceIds,
         status: 'queued',
-        ownerId: user.uid,
+        ownerId,
         createdAt: Date.now(),
         priority: 1,
         forceWork: tab.forceWork,
@@ -354,7 +357,6 @@ export default function JobsPage() {
       const primaryDeviceId = targetDeviceIds[0];
       const cmdId = `job_${jobId}_${primaryDeviceId}`;
 
-      // Write scheduler rationale to live console
       const consoleLogs = finalDecision.rankedNodes.length > 0
         ? buildSchedulerConsoleLogs(finalDecision)
         : [
@@ -363,7 +365,6 @@ export default function JobsPage() {
             `[ClusterOS] Sending script to agent...\n`,
           ];
       if (tab.forceWork) consoleLogs.push(`[ClusterOS] FORCE WORK active: Terminating heavy background apps before execution.`);
-      await writeJobInitialLogs(primaryDeviceId, cmdId, consoleLogs);
 
       setSelectedJob(null);
       setActiveConsoleJobId(jobId);
@@ -377,8 +378,11 @@ export default function JobsPage() {
         await dispatchSingleDevice(tabId, jobId, primaryDeviceId, tab.code, tab.forceWork);
       }
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Dispatch failed');
+      console.error('Run workload failed:', err);
+      alert(err instanceof Error ? err.message : 'Failed to dispatch workload. Check console for details.');
       setRunningTabs(prev => { const s = new Set(prev); s.delete(tabId); return s; });
+    } finally {
+      setIsAnalyzing(false);
     }
   };
 
@@ -696,26 +700,62 @@ export default function JobsPage() {
                 </div>
               )}
 
-              <div className="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-1 select-text scrollbar-thin">
+              <div ref={terminalScrollRef} className="flex-1 p-4 overflow-y-auto font-mono text-xs space-y-0.5 select-text scrollbar-thin">
                 {activeConsoleLines.length === 0 ? (
-                  <div className="h-full flex flex-col items-center justify-center text-slate-600 text-center">
-                    <TerminalIcon className="w-8 h-8 mb-2 opacity-20" />
-                    <p>Console Idle</p>
-                    <p className="text-[10px] opacity-60 mt-1">Press Run Workload or select a past job below</p>
-                  </div>
+                  activeConsoleJobId ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-400 text-center py-8">
+                      <Loader2 className="w-8 h-8 text-green-400 animate-spin mb-3" />
+                      <p className="font-semibold text-green-400 tracking-wide text-xs">DISPATCHING WORKLOAD</p>
+                      <p className="text-[10px] text-slate-500 mt-1">Waiting for agent to initialize execution...</p>
+                    </div>
+                  ) : (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-600 text-center">
+                      <TerminalIcon className="w-8 h-8 mb-2 opacity-20" />
+                      <p>Console Idle</p>
+                      <p className="text-[10px] opacity-60 mt-1">Press Run Workload or select a past job below</p>
+                    </div>
+                  )
                 ) : (
-                  activeConsoleLines.map(line => {
-                    let cls = 'text-slate-300';
-                    if (line.text.startsWith('[ClusterOS Scheduler]')) cls = 'text-violet-300 font-semibold';
-                    else if (line.text.startsWith('[ClusterOS]')) cls = 'text-green-400 font-semibold';
-                    else if (line.text.startsWith('ERROR:') || line.text.includes('WARNING')) cls = 'text-red-400';
-                    else if (line.text.startsWith('Epoch')) cls = 'text-blue-300';
-                    return (
-                      <div key={line.idx} className={`leading-5 whitespace-pre-wrap ${cls}`}>{line.text}</div>
-                    );
-                  })
+                  activeConsoleLines
+                    .filter(line => {
+                      const t = line.text.trim();
+                      if (!t) return false;
+                      // Filter out remaining pip noise not caught by agent
+                      if (t.startsWith('Requirement already satisfied') || t.startsWith('[pip] Requirement')) return false;
+                      if (t.startsWith('[pip] Downloading') || (t.startsWith('Downloading') && (t.endsWith('.whl') || t.endsWith('.gz') || t.includes('/packages/')))) return false;
+                      if (t.startsWith('Using cached') || t.startsWith('[pip] Using cached')) return false;
+                      if (t.startsWith('Obtaining') || t.startsWith('[pip] Obtaining')) return false;
+                      if (t.includes('━━') || t.includes('───')) return false;
+                      if (t.includes('kB/s') || t.includes('MB/s')) return false;
+                      if (t.startsWith('Notice:')) return false;
+                      return true;
+                    })
+                    .map(line => {
+                      const t = line.text.trim();
+                      let cls = 'text-slate-200';
+                      let prefix = '';
+                      if (t.startsWith('[ClusterOS Scheduler]')) {
+                        cls = 'text-violet-300 font-semibold';
+                      } else if (t.startsWith('[ClusterOS]')) {
+                        cls = 'text-green-400 font-semibold';
+                      } else if (t.startsWith('[pip]')) {
+                        cls = 'text-cyan-400/80';
+                      } else if (t.startsWith('ERROR:') || t.includes('WARNING') || t.startsWith('Traceback') || t.includes('Error:')) {
+                        cls = 'text-red-400 font-semibold';
+                      } else if (t.startsWith('Successfully installed')) {
+                        cls = 'text-emerald-400';
+                      } else {
+                        // Actual script output — slightly brighter
+                        cls = 'text-slate-100';
+                        prefix = '› ';
+                      }
+                      return (
+                        <div key={line.idx} className={`leading-5 whitespace-pre-wrap ${cls}`}>
+                          {prefix}{line.text}
+                        </div>
+                      );
+                    })
                 )}
-                <div ref={terminalEndRef} />
               </div>
             </div>
           </div>

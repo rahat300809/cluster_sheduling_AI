@@ -240,17 +240,19 @@ public class CommandExecutor
                 if (ct.IsCancellationRequested) break;
 
                 await _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, $"[ClusterOS] pip install {pkg}...");
-                var (pipOk, pipOut) = await RunProcessAsync(pipExe, $"install {pkg}", ct, (pipLine) =>
+                var (pipOk, pipOut) = await RunProcessAsync(pipExe, $"install {pkg} --quiet", ct, (pipLine) =>
                 {
-                    _ = _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, pipLine);
+                    // Skip noisy pip lines — only stream meaningful output
+                    if (IsMeaningfulPipLine(pipLine))
+                        _ = _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, $"[pip] {pipLine}");
                 }, timeoutSeconds: 120);
 
-                if (!pipOk)
-                {
+                if (pipOk)
+                    await _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, $"[ClusterOS] ✓ Package '{pkg}' ready.");
+                else
                     await _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, $"[ClusterOS WARNING] Failed to install package '{pkg}': {pipOut}");
-                }
             }
-            await _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, "[ClusterOS] Dependencies verified. Starting execution...\n");
+            await _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, "[ClusterOS] All dependencies ready. Starting execution...\n");
         }
 
         await _rtdbClient.UpdateCommandStatusAsync(deviceId, command.CommandId, "running");
@@ -260,7 +262,7 @@ public class CommandExecutor
         await File.WriteAllTextAsync(tempPath, scriptText, ct);
 
         var pythonExe = FindPython();
-        var result = await RunProcessAsync(pythonExe, $"\"{tempPath}\"", ct, (line) =>
+        var result = await RunProcessAsync(pythonExe, $"-u \"{tempPath}\"", ct, (line) =>
         {
             _ = _rtdbClient.AppendJobOutputLineAsync(deviceId, command.CommandId, lineIndex++, line);
         }, timeoutSeconds: 600);
@@ -399,6 +401,31 @@ public class CommandExecutor
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Returns true only for pip lines that are meaningful to show in the dashboard console.
+    /// Filters out progress bars, "Requirement already satisfied", download chatter, etc.
+    /// </summary>
+    private static bool IsMeaningfulPipLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return false;
+        var t = line.Trim();
+        // Skip noisy pip patterns
+        if (t.StartsWith("Requirement already satisfied", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.StartsWith("Downloading", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.StartsWith("Using cached", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.StartsWith("Obtaining", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.StartsWith("Collecting", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.Contains("━━") || t.Contains("───") || t.Contains("---")) return false;
+        if (t.StartsWith("Notice:", StringComparison.OrdinalIgnoreCase)) return false;
+        if (t.Contains("kB/s") || t.Contains("MB/s")) return false;
+        // Always show errors and warnings
+        if (t.StartsWith("ERROR", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("WARNING", StringComparison.OrdinalIgnoreCase)) return true;
+        if (t.StartsWith("Successfully installed", StringComparison.OrdinalIgnoreCase)) return true;
+        // Skip anything else short/cryptic
+        return t.Length > 5;
     }
 
     private static string FindPython()

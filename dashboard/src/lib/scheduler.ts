@@ -42,8 +42,14 @@ let rrCounter = 0;
 
 // ─── Utility helpers ──────────────────────────────────────────────────────────
 
+function num(val: unknown, fallback = 0): number {
+  const n = typeof val === 'number' ? val : Number(val);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function clamp(val: number, min = 0, max = 100) {
-  return Math.max(min, Math.min(max, val));
+  const n = num(val);
+  return Math.max(min, Math.min(max, n));
 }
 
 /**
@@ -51,18 +57,18 @@ function clamp(val: number, min = 0, max = 100) {
  * Uses 5-min load average if available, otherwise current usage.
  */
 function cpuScore(m: SystemSnapshot): number {
-  const usage = m.cpu.load5 ?? m.cpu.total;
+  const usage = num(m.cpu?.load5 ?? m.cpu?.total);
   return clamp(100 - usage);
 }
 
 /** RAM availability score (0–100). */
 function ramScore(m: SystemSnapshot): number {
-  return clamp(100 - m.ram.usedPercent);
+  return clamp(100 - num(m.ram?.usedPercent));
 }
 
 /** GPU availability score (0–100). GPU memory pressure also penalised. */
 function gpuScore(m: SystemSnapshot): number {
-  const usage = (m.gpu.usagePercent + m.gpu.memUsedPercent) / 2;
+  const usage = (num(m.gpu?.usagePercent) + num(m.gpu?.memUsedPercent)) / 2;
   return clamp(100 - usage);
 }
 
@@ -71,8 +77,8 @@ function gpuScore(m: SystemSnapshot): number {
  * Perfect = both temps below 50°C. Degrades linearly to 0 at threshold.
  */
 function temperatureScore(m: SystemSnapshot): number {
-  const cpuT = m.temperatures.cpu || 0;
-  const gpuT = m.temperatures.gpu || 0;
+  const cpuT = m.temperatures?.cpu || 0;
+  const gpuT = m.temperatures?.gpu || 0;
   const worst = Math.max(cpuT, gpuT);
   if (worst <= 50) return 100;
   if (worst >= SAFE_TEMP_MAX) return 0;
@@ -85,9 +91,9 @@ function temperatureScore(m: SystemSnapshot): number {
  * Also rewards high download throughput.
  */
 function networkScore(m: SystemSnapshot): number {
-  const latency = m.network.latencyMs ?? 10;
+  const latency = m.network?.latencyMs ?? 10;
   const latencyScore = clamp(100 - ((latency - IDEAL_LATENCY) / (MAX_LATENCY - IDEAL_LATENCY)) * 100);
-  const throughputScore = clamp(Math.min(m.network.downloadMbps / 10, 1) * 100); // 10 Mbps = 100
+  const throughputScore = clamp(Math.min((m.network?.downloadMbps ?? 0) / 10, 1) * 100); // 10 Mbps = 100
   return clamp((latencyScore * 0.7) + (throughputScore * 0.3));
 }
 
@@ -116,9 +122,9 @@ function reliabilityScore(m: SystemSnapshot): number {
  * Penalises high disk usage and low I/O throughput.
  */
 function diskScore(m: SystemSnapshot): number {
-  const usageScore = clamp(100 - m.disk.usedPercent);
-  const readScore = clamp(Math.min((m.disk.readMbps ?? 50) / 200, 1) * 100);  // 200 MB/s = 100
-  const writeScore = clamp(Math.min((m.disk.writeMbps ?? 50) / 200, 1) * 100);
+  const usageScore = clamp(100 - (m.disk?.usedPercent ?? 0));
+  const readScore = clamp(Math.min((m.disk?.readMbps ?? 50) / 200, 1) * 100);  // 200 MB/s = 100
+  const writeScore = clamp(Math.min((m.disk?.writeMbps ?? 50) / 200, 1) * 100);
   return clamp((usageScore * 0.5) + (readScore * 0.25) + (writeScore * 0.25));
 }
 
@@ -136,14 +142,14 @@ function eliminationReason(m: SystemSnapshot | undefined, lastSeen: number): str
   }
 
   if (m.healthStatus === 'critical') return 'Node health status: CRITICAL';
-  if (m.temperatures.cpu >= THRESHOLDS.maxCpuTemp)
-    return `CPU temperature critical (${m.temperatures.cpu.toFixed(0)}°C ≥ ${THRESHOLDS.maxCpuTemp}°C)`;
-  if (m.temperatures.gpu >= THRESHOLDS.maxGpuTemp)
-    return `GPU temperature critical (${m.temperatures.gpu.toFixed(0)}°C ≥ ${THRESHOLDS.maxGpuTemp}°C)`;
-  if (m.ram.usedPercent >= THRESHOLDS.maxRamUsage)
-    return `RAM usage critical (${m.ram.usedPercent.toFixed(0)}% ≥ ${THRESHOLDS.maxRamUsage}%)`;
-  if (m.disk.usedPercent >= THRESHOLDS.maxDiskUsage)
-    return `Disk usage critical (${m.disk.usedPercent.toFixed(0)}% ≥ ${THRESHOLDS.maxDiskUsage}%)`;
+  if ((m.temperatures?.cpu ?? 0) >= THRESHOLDS.maxCpuTemp)
+    return `CPU temperature critical (${(m.temperatures?.cpu ?? 0).toFixed(0)}°C ≥ ${THRESHOLDS.maxCpuTemp}°C)`;
+  if ((m.temperatures?.gpu ?? 0) >= THRESHOLDS.maxGpuTemp)
+    return `GPU temperature critical (${(m.temperatures?.gpu ?? 0).toFixed(0)}°C ≥ ${THRESHOLDS.maxGpuTemp}°C)`;
+  if ((m.ram?.usedPercent ?? 0) >= THRESHOLDS.maxRamUsage)
+    return `RAM usage critical (${(m.ram?.usedPercent ?? 0).toFixed(0)}% ≥ ${THRESHOLDS.maxRamUsage}%)`;
+  if ((m.disk?.usedPercent ?? 0) >= THRESHOLDS.maxDiskUsage)
+    return `Disk usage critical (${(m.disk?.usedPercent ?? 0).toFixed(0)}% ≥ ${THRESHOLDS.maxDiskUsage}%)`;
   if ((m.waitingTasks ?? 0) >= THRESHOLDS.maxQueuedTasks)
     return `Queue overloaded (${m.waitingTasks} waiting tasks)`;
 
@@ -165,23 +171,23 @@ function buildNodeBreakdown(
     return {
       deviceId: device.deviceId,
       deviceName: name,
-      cpuUsage: m?.cpu.total ?? 0,
-      ramUsage: m?.ram.usedPercent ?? 0,
-      gpuUsage: m?.gpu.usagePercent ?? 0,
-      cpuTemp: m?.temperatures.cpu ?? 0,
-      gpuTemp: m?.temperatures.gpu ?? 0,
-      latencyMs: m?.network.latencyMs ?? 0,
+      cpuUsage: m?.cpu?.total ?? 0,
+      ramUsage: m?.ram?.usedPercent ?? 0,
+      gpuUsage: m?.gpu?.usagePercent ?? 0,
+      cpuTemp: m?.temperatures?.cpu ?? 0,
+      gpuTemp: m?.temperatures?.gpu ?? 0,
+      latencyMs: m?.network?.latencyMs ?? 0,
       runningTasks: m?.runningTasks ?? 0,
       waitingTasks: m?.waitingTasks ?? 0,
-      diskUsage: m?.disk.usedPercent ?? 0,
+      diskUsage: m?.disk?.usedPercent ?? 0,
       successRate: m?.successRate ?? 80,
       batteryPercent: m?.batteryPercent ?? null,
       powerPluggedIn: m?.powerPluggedIn ?? null,
       uptimeHours: (m?.uptimeSeconds ?? 0) / 3600,
-      diskReadMbps: m?.disk.readMbps ?? 0,
-      diskWriteMbps: m?.disk.writeMbps ?? 0,
-      downloadMbps: m?.network.downloadMbps ?? 0,
-      uploadMbps: m?.network.uploadMbps ?? 0,
+      diskReadMbps: m?.disk?.readMbps ?? 0,
+      diskWriteMbps: m?.disk?.writeMbps ?? 0,
+      downloadMbps: m?.network?.downloadMbps ?? 0,
+      uploadMbps: m?.network?.uploadMbps ?? 0,
       cpuScore: 0,
       ramScore: 0,
       gpuScore: 0,
@@ -195,7 +201,7 @@ function buildNodeBreakdown(
       status: m?.status ?? 'offline',
       healthStatus: m?.healthStatus ?? 'critical',
       eliminated: true,
-      eliminationReason: elimReason,
+      ...(elimReason ? { eliminationReason: elimReason } : {}),
     };
   }
 
@@ -221,23 +227,23 @@ function buildNodeBreakdown(
   return {
     deviceId: device.deviceId,
     deviceName: name,
-    cpuUsage: m.cpu.total,
-    ramUsage: m.ram.usedPercent,
-    gpuUsage: m.gpu.usagePercent,
-    cpuTemp: m.temperatures.cpu,
-    gpuTemp: m.temperatures.gpu,
-    latencyMs: m.network.latencyMs ?? 10,
+    cpuUsage: m.cpu?.total ?? 0,
+    ramUsage: m.ram?.usedPercent ?? 0,
+    gpuUsage: m.gpu?.usagePercent ?? 0,
+    cpuTemp: m.temperatures?.cpu ?? 0,
+    gpuTemp: m.temperatures?.gpu ?? 0,
+    latencyMs: m.network?.latencyMs ?? 10,
     runningTasks: m.runningTasks ?? 0,
     waitingTasks: m.waitingTasks ?? 0,
-    diskUsage: m.disk.usedPercent,
+    diskUsage: m.disk?.usedPercent ?? 0,
     successRate: m.successRate ?? 80,
     batteryPercent: m.batteryPercent ?? null,
     powerPluggedIn: m.powerPluggedIn ?? null,
     uptimeHours: (m.uptimeSeconds ?? 0) / 3600,
-    diskReadMbps: m.disk.readMbps ?? 0,
-    diskWriteMbps: m.disk.writeMbps ?? 0,
-    downloadMbps: m.network.downloadMbps,
-    uploadMbps: m.network.uploadMbps,
+    diskReadMbps: m.disk?.readMbps ?? 0,
+    diskWriteMbps: m.disk?.writeMbps ?? 0,
+    downloadMbps: m.network?.downloadMbps ?? 0,
+    uploadMbps: m.network?.uploadMbps ?? 0,
     cpuScore: cs,
     ramScore: rs,
     gpuScore: gs,

@@ -143,6 +143,7 @@ export function subscribeJobOutput(
     }
     const val = snap.val() as Record<string, { text: string; ts: number }>;
     const lines: OutputLine[] = Object.entries(val)
+      .filter(([k, v]) => v !== null && v !== undefined)
       .map(([k, v]) => ({ idx: parseInt(k), text: v.text, ts: v.ts }))
       .sort((a, b) => a.idx - b.idx);
     callback(lines);
@@ -220,4 +221,65 @@ export function subscribeDeviceOnlineStatus(
     });
   });
   return () => off(statusRef);
+}
+
+// ─── RTDB Rental Helpers ──────────────────────────────────────────────────────
+
+export interface ActiveRentalSessionRTDB {
+  sessionId: string;
+  status: 'pending' | 'running' | 'completed' | 'cancelled' | 'failed';
+  mode: 'fixed' | 'pay_as_you_go';
+  hourlyRate: number;
+  durationHours: number;
+  durationMinutes: number; // minutes-based duration
+  startTime: number;
+  elapsedSeconds: number;
+  earnedBalance: number;
+}
+
+export async function startActiveRentalSessionRTDB(
+  deviceId: string,
+  session: ActiveRentalSessionRTDB
+): Promise<void> {
+  await set(ref(rtdb, `devices/${deviceId}/activeRentalSession`), session);
+  await set(ref(rtdb, `rentals/${session.sessionId}`), session);
+}
+
+export function subscribeActiveRentalSessionRTDB(
+  deviceId: string,
+  callback: (session: ActiveRentalSessionRTDB | null) => void
+): () => void {
+  const rentalRef = ref(rtdb, `devices/${deviceId}/activeRentalSession`);
+  onValue(rentalRef, (snap) => {
+    callback(snap.exists() ? snap.val() as ActiveRentalSessionRTDB : null);
+  });
+  return () => off(rentalRef);
+}
+
+export async function stopActiveRentalSessionRTDB(
+  deviceId: string,
+  sessionId: string,
+  finalStatus: 'completed' | 'cancelled' | 'failed'
+): Promise<void> {
+  const deviceSessionRef = ref(rtdb, `devices/${deviceId}/activeRentalSession`);
+  const snap = await get(deviceSessionRef);
+  if (snap.exists()) {
+    const session = snap.val() as ActiveRentalSessionRTDB;
+    session.status = finalStatus;
+    // Update global rentals in RTDB
+    await set(ref(rtdb, `rentals/${sessionId}`), session);
+  }
+  // Clear the active session from the device
+  await remove(deviceSessionRef);
+}
+
+export function subscribeGlobalRentalSessionRTDB(
+  sessionId: string,
+  callback: (session: ActiveRentalSessionRTDB | null) => void
+): () => void {
+  const rentalRef = ref(rtdb, `rentals/${sessionId}`);
+  onValue(rentalRef, (snap) => {
+    callback(snap.exists() ? snap.val() as ActiveRentalSessionRTDB : null);
+  });
+  return () => off(rentalRef);
 }

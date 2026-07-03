@@ -99,6 +99,9 @@ export interface Device {
   lastSeen: number;
   metrics?: SystemSnapshot;
   processes?: ProcessInfo[];
+  type?: 'standard' | 'rental';
+  rentalStatus?: 'idle' | 'rented';
+  rentalSessionId?: string | null;
 }
 
 // ─── Cluster Types ────────────────────────────────────────────────────────────
