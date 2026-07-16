@@ -158,6 +158,56 @@ export async function clearJobOutput(deviceId: string, commandId: string): Promi
   await remove(ref(rtdb, `devices/${deviceId}/jobOutput/${commandId}`));
 }
 
+// ─── Job Artifact Subscriptions (Model Downloads) ─────────────────────────
+
+export interface ArtifactEntry {
+  name: string;
+  storagePath: string;
+  downloadUrl: string;
+  size: number;
+  uploadedAt: number;
+  base64?: string; // Inline content when Firebase Storage is unavailable
+}
+
+/**
+ * Subscribe to job artifacts uploaded by the agent after script completion.
+ * The agent writes to devices/{deviceId}/jobArtifacts/{commandId}/[index].
+ */
+export function subscribeJobArtifacts(
+  deviceId: string,
+  commandId: string,
+  callback: (artifacts: ArtifactEntry[]) => void
+): () => void {
+  const artifactsRef = ref(rtdb, `devices/${deviceId}/jobArtifacts/${commandId}`);
+  onValue(artifactsRef, (snap) => {
+    if (!snap.exists()) {
+      callback([]);
+      return;
+    }
+    const val = snap.val();
+    const artifacts: ArtifactEntry[] = Array.isArray(val)
+      ? val.filter((a: ArtifactEntry | null) => a !== null)
+      : Object.values(val);
+    callback(artifacts);
+  });
+  return () => off(artifactsRef);
+}
+
+/**
+ * Clean up job artifacts from RTDB (optional cleanup after download).
+ */
+export async function clearJobArtifacts(deviceId: string, commandId: string): Promise<void> {
+  await remove(ref(rtdb, `devices/${deviceId}/jobArtifacts/${commandId}`));
+}
+
+export async function updateJobArtifactsList(
+  deviceId: string,
+  commandId: string,
+  artifacts: ArtifactEntry[]
+): Promise<void> {
+  await set(ref(rtdb, `devices/${deviceId}/jobArtifacts/${commandId}`), artifacts);
+}
+
 export async function writeJobInitialLogs(
   deviceId: string,
   commandId: string,

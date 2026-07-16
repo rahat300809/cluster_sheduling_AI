@@ -65,7 +65,7 @@ function ScoreBar({ value, label, icon: Icon }: { value: number; label: string; 
 
 // ─── PDF Export (pure jsPDF — no html2canvas) ─────────────────────────────────
 
-async function exportToPDF(
+export async function exportToPDF(
   inputDecision: SchedulerDecision,
   aiReport: AIAnalysisReport | null,
   jobName: string
@@ -681,6 +681,8 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
             diskWriteMbps: m?.disk?.writeMbps ?? 0,
             downloadMbps: m?.network?.downloadMbps ?? 0,
             uploadMbps: m?.network?.uploadMbps ?? 0,
+            gpuMemTotal: m?.gpu?.memTotal ?? 0,
+            gpuName: m?.gpu?.name ?? '',
             cpuScore: 0, ramScore: 0, gpuScore: 0, temperatureScore: 0, networkScore: 0, queueScore: 0, reliabilityScore: 0, diskScore: 0, finalScore: 0, averagePerformance: 0,
             status: m?.status ?? 'offline', healthStatus: m?.healthStatus ?? 'critical', eliminated: true, eliminationReason: 'Node is offline'
           };
@@ -966,45 +968,45 @@ export default function AiReportModal({ decision: inputDecision, jobName = 'Unna
                               {/* CPU */}
                               <td className="py-4 px-3 border-b border-slate-850">
                                 <div className="font-jetbrains">
-                                  <span className="font-bold text-slate-100 text-xs block">{node.cpuUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-400 mt-0.5">{node.cpuTemp.toFixed(0)}°C</span>
-                                  <span className={`block text-[9px] font-bold ${scoreClass(node.cpuScore)}`}>Sc: {node.cpuScore.toFixed(0)}</span>
+                                  <span className="font-bold text-white text-sm block">{node.cpuUsage.toFixed(0)}%</span>
+                                  <span className="block text-[11px] text-slate-300 font-semibold mt-0.5">{node.cpuTemp.toFixed(0)}°C</span>
+                                  <span className={`block text-[11px] font-extrabold ${scoreClass(node.cpuScore)}`}>Sc: {node.cpuScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* RAM */}
                               <td className="py-4 px-3 border-b border-slate-850">
                                 <div className="font-jetbrains">
-                                  <span className="font-bold text-slate-100 text-xs block">{node.ramUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-400 mt-0.5">Uptime: {node.uptimeHours.toFixed(1)}h</span>
-                                  <span className={`block text-[9px] font-bold ${scoreClass(node.ramScore)}`}>Sc: {node.ramScore.toFixed(0)}</span>
+                                  <span className="font-bold text-white text-sm block">{node.ramUsage.toFixed(0)}%</span>
+                                  <span className="block text-[11px] text-slate-300 font-semibold mt-0.5">Uptime: {node.uptimeHours.toFixed(1)}h</span>
+                                  <span className={`block text-[11px] font-extrabold ${scoreClass(node.ramScore)}`}>Sc: {node.ramScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* GPU */}
                               <td className="py-4 px-3 border-b border-slate-850">
                                 <div className="font-jetbrains">
-                                  <span className="font-bold text-slate-100 text-xs block">{node.gpuUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-400 mt-0.5">{node.gpuTemp.toFixed(0)}°C</span>
-                                  <span className={`block text-[9px] font-bold ${scoreClass(node.gpuScore)}`}>Sc: {node.gpuScore.toFixed(0)}</span>
+                                  <span className="font-bold text-white text-sm block">{node.gpuUsage.toFixed(0)}%</span>
+                                  <span className="block text-[11px] text-slate-300 font-semibold mt-0.5">{node.gpuTemp.toFixed(0)}°C</span>
+                                  <span className={`block text-[11px] font-extrabold ${scoreClass(node.gpuScore)}`}>Sc: {node.gpuScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* SSD/Disk */}
                               <td className="py-4 px-3 border-b border-slate-850">
                                 <div className="font-jetbrains">
-                                  <span className="font-bold text-slate-100 text-xs block">{node.diskUsage.toFixed(0)}%</span>
-                                  <span className="block text-[9px] text-slate-400 mt-0.5">{(node.diskReadMbps + node.diskWriteMbps).toFixed(0)} MB/s</span>
-                                  <span className={`block text-[9px] font-bold ${scoreClass(node.diskScore)}`}>Sc: {node.diskScore.toFixed(0)}</span>
+                                  <span className="font-bold text-white text-sm block">{node.diskUsage.toFixed(0)}%</span>
+                                  <span className="block text-[11px] text-slate-300 font-semibold mt-0.5">{(node.diskReadMbps + node.diskWriteMbps).toFixed(0)} MB/s</span>
+                                  <span className={`block text-[11px] font-extrabold ${scoreClass(node.diskScore)}`}>Sc: {node.diskScore.toFixed(0)}</span>
                                 </div>
                               </td>
 
                               {/* Network */}
                               <td className="py-4 px-3 border-b border-slate-850">
                                 <div className="font-jetbrains">
-                                  <span className="font-bold text-slate-100 text-xs block">{node.latencyMs.toFixed(0)}ms</span>
-                                  <span className="block text-[9px] text-slate-400 mt-0.5">{node.downloadMbps.toFixed(0)} Mbps</span>
-                                  <span className={`block text-[9px] font-bold ${scoreClass(node.networkScore)}`}>Sc: {node.networkScore.toFixed(0)}</span>
+                                  <span className="font-bold text-white text-sm block">{node.latencyMs.toFixed(0)}ms</span>
+                                  <span className="block text-[11px] text-slate-300 font-semibold mt-0.5">{node.downloadMbps.toFixed(0)} Mbps</span>
+                                  <span className={`block text-[11px] font-extrabold ${scoreClass(node.networkScore)}`}>Sc: {node.networkScore.toFixed(0)}</span>
                                 </div>
                               </td>
 

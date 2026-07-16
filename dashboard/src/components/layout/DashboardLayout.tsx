@@ -11,7 +11,7 @@ import {
   LayoutDashboard, Monitor, Activity, Terminal, Network,
   Briefcase, BarChart3, Settings, LogOut, ChevronLeft,
   ChevronRight, Zap, Bell, Search, Menu, X, Download,
-  Globe, MapPin, Banknote, Smartphone
+  Globe, MapPin, Banknote, Smartphone, BookOpen
 } from 'lucide-react';
 
 type NavItem = { href: string; icon: React.ElementType; label: string; exact?: boolean };
@@ -23,6 +23,7 @@ const navItems: NavItem[] = [
   { href: '/commands', icon: Terminal, label: 'Commands' },
   { href: '/clusters', icon: Network, label: 'Clusters' },
   { href: '/jobs', icon: Briefcase, label: 'Jobs' },
+  { href: '/notebook', icon: BookOpen, label: 'Notebook' },
   { href: '/analytics', icon: BarChart3, label: 'Analytics' },
   { href: '/rentals', icon: Banknote, label: 'Rentals' },
   { href: '/settings', icon: Settings, label: 'Settings' },

@@ -1,0 +1,8 @@
+# AI Brain — optional: uncommit to share brain with team
+brain.db
+brain.db-shm
+brain.db-wal
+cache/
+logs/
+vectors/
+*.cache.json

@@ -2,6 +2,9 @@
   "firestore": {
     "rules": "firebase/firestore.rules"
   },
+  "storage": {
+    "rules": "firebase/storage.rules"
+  },
   "database": {
     "rules": "firebase/database.rules.json"
   },
@@ -13,6 +16,17 @@
       "**/node_modules/**"
     ],
     "cleanUrls": true,
-    "trailingSlash": true
+    "trailingSlash": true,
+    "headers": [
+      {
+        "source": "**/*.@(html|json)",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "max-age=0, no-cache, no-store, must-revalidate"
+          }
+        ]
+      }
+    ]
   }
 }

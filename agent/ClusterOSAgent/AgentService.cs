@@ -24,6 +24,10 @@ public class AgentService : BackgroundService
     private System.Threading.Timer? _metricsTimer;
     private System.Threading.Timer? _commandTimer;
 
+    // ── Accurate task tracking for the scheduler ──────────────────────────────
+    private int _runningJobCount = 0;
+    private int _pendingCommandCount = 0;
+
     public AgentService(
         ILogger<AgentService> logger,
         IOptions<AgentConfig> config,
@@ -105,6 +109,19 @@ public class AgentService : BackgroundService
         // Step 3: Initialize hardware monitor
         _hardwareMonitor.Initialize();
 
+        // Subscribe to command handler events for accurate task counting
+        _commandHandler.JobStarted += (cmdId, cmdType) =>
+        {
+            Interlocked.Increment(ref _runningJobCount);
+            _logger.LogInformation("Job started: {CmdId} ({Type}). Active jobs: {Count}", cmdId, cmdType, _runningJobCount);
+        };
+        _commandHandler.JobFinished += (cmdId, success) =>
+        {
+            Interlocked.Decrement(ref _runningJobCount);
+            if (_runningJobCount < 0) _runningJobCount = 0;
+            _logger.LogInformation("Job finished: {CmdId} (success={Success}). Active jobs: {Count}", cmdId, success, _runningJobCount);
+        };
+
         // Step 4: Register device in RTDB (mark as online)
         try
         {
@@ -116,16 +133,28 @@ public class AgentService : BackgroundService
             _logger.LogError(ex, "Failed to register device online in RTDB");
         }
 
-        // Step 5: Start metrics collection loop
+        // Step 5: Start metrics collection loop (with error-safe callback)
         _metricsTimer = new System.Threading.Timer(
-            async _ => await CollectAndPublishMetricsAsync(stoppingToken),
+            async _ =>
+            {
+                try { await CollectAndPublishMetricsAsync(stoppingToken); }
+                catch (Exception ex) { _logger.LogError(ex, "Metrics collection cycle failed"); }
+            },
             null,
             TimeSpan.Zero,
             TimeSpan.FromSeconds(_config.MetricsIntervalSeconds));
 
-        // Step 6: Start command polling loop
+        // Step 6: Start command polling loop (with error-safe callback)
         _commandTimer = new System.Threading.Timer(
-            async _ => { if (_identity != null) await _commandHandler.PollAndExecuteAsync(_identity.DeviceId, stoppingToken); },
+            async _ =>
+            {
+                try
+                {
+                    if (_identity != null)
+                        await _commandHandler.PollAndExecuteAsync(_identity.DeviceId, stoppingToken);
+                }
+                catch (Exception ex) { _logger.LogError(ex, "Command polling cycle failed"); }
+            },
             null,
             TimeSpan.FromSeconds(2),
             TimeSpan.FromSeconds(_config.CommandPollIntervalSeconds));
@@ -210,8 +239,21 @@ public class AgentService : BackgroundService
             // ── Uptime ─────────────────────────────────────────────────────
             long uptimeSec = Environment.TickCount64 / 1000L;
 
-            // ── Running tasks: count non-idle processes on the node ─────────
-            int runningTasks = processes.Count(p => p.CpuPercent > 0.5f);
+            // ── Task tracking: use accurate counts from CommandHandler ─────
+            int runningTasks = Math.Max(0, _runningJobCount);
+            int waitingTasks = Math.Max(0, _pendingCommandCount - runningTasks);
+            if (waitingTasks < 0) waitingTasks = 0;
+
+            // Update pending command count for next cycle
+            try
+            {
+                if (_identity != null)
+                {
+                    var pending = await _rtdbClient.GetPendingCommandsAsync(_identity.DeviceId);
+                    _pendingCommandCount = pending.Count;
+                }
+            }
+            catch { /* best-effort */ }
 
             // ── Compute health status ───────────────────────────────────────
             string health = "healthy";
@@ -229,7 +271,7 @@ public class AgentService : BackgroundService
                 HeartbeatAt    = now,
                 UptimeSeconds  = uptimeSec,
                 RunningTasks   = runningTasks,
-                WaitingTasks   = 0,     // reserved for future queue tracking
+                WaitingTasks   = waitingTasks,
                 PowerPluggedIn = true,   // desktops are always plugged in
                 HealthStatus   = health,
                 Cpu            = metrics.Cpu,

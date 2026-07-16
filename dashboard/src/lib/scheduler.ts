@@ -66,10 +66,39 @@ function ramScore(m: SystemSnapshot): number {
   return clamp(100 - num(m.ram?.usedPercent));
 }
 
-/** GPU availability score (0–100). GPU memory pressure also penalised. */
+/**
+ * GPU availability score (0–100).
+ * If no dedicated GPU exists (memTotal = 0), score is fixed at 50
+ * (a neutral score — not penalized but not rewarded).
+ * GPU memory pressure also penalised.
+ */
 function gpuScore(m: SystemSnapshot): number {
+  // No dedicated GPU detected — give neutral score instead of misleading 100
+  if (!m.gpu?.name || m.gpu.name === '' || (m.gpu.memTotal ?? 0) === 0) {
+    return 50;
+  }
   const usage = (num(m.gpu?.usagePercent) + num(m.gpu?.memUsedPercent)) / 2;
   return clamp(100 - usage);
+}
+
+/**
+ * GPU capability bonus (0–15 points).
+ * Rewards nodes with large dedicated GPUs (NVIDIA/AMD with high VRAM).
+ * Only effective when the job uses ML libraries.
+ */
+function gpuCapabilityBonus(m: SystemSnapshot): number {
+  const memTotal = m.gpu?.memTotal ?? 0;
+  const name = (m.gpu?.name ?? '').toLowerCase();
+  // No GPU or integrated graphics — no bonus
+  if (memTotal <= 0) return 0;
+  if (name.includes('intel') && !name.includes('arc')) return 0; // Intel UHD/Iris = integrated, Intel Arc = dedicated
+
+  // Scale bonus by VRAM: 2GB=3pts, 4GB=6pts, 8GB=10pts, 12GB+=15pts
+  if (memTotal >= 12000) return 15;
+  if (memTotal >= 8000) return 10;
+  if (memTotal >= 4000) return 6;
+  if (memTotal >= 2000) return 3;
+  return 1;
 }
 
 /**
@@ -163,7 +192,8 @@ function buildNodeBreakdown(
   m: SystemSnapshot | undefined,
   weights: SchedulerWeights,
   isEliminated: boolean,
-  elimReason?: string
+  elimReason?: string,
+  script?: string
 ): NodeScoreBreakdown {
   const name = device.name || device.machineName;
 
@@ -188,6 +218,8 @@ function buildNodeBreakdown(
       diskWriteMbps: m?.disk?.writeMbps ?? 0,
       downloadMbps: m?.network?.downloadMbps ?? 0,
       uploadMbps: m?.network?.uploadMbps ?? 0,
+      gpuMemTotal: m?.gpu?.memTotal ?? 0,
+      gpuName: m?.gpu?.name ?? '',
       cpuScore: 0,
       ramScore: 0,
       gpuScore: 0,
@@ -244,6 +276,8 @@ function buildNodeBreakdown(
     diskWriteMbps: m.disk?.writeMbps ?? 0,
     downloadMbps: m.network?.downloadMbps ?? 0,
     uploadMbps: m.network?.uploadMbps ?? 0,
+    gpuMemTotal: m.gpu?.memTotal ?? 0,
+    gpuName: m.gpu?.name ?? '',
     cpuScore: cs,
     ramScore: rs,
     gpuScore: gs,
@@ -252,7 +286,11 @@ function buildNodeBreakdown(
     queueScore: qs,
     reliabilityScore: rels,
     diskScore: ds,
-    finalScore: clamp(final),
+    finalScore: (() => {
+      const isMlJob = script ? /import\s+(torch|tensorflow|keras|sklearn|pandas|numpy)/.test(script) : false;
+      const bonus = isMlJob ? gpuCapabilityBonus(m) : 0;
+      return clamp(final + bonus);
+    })(),
     averagePerformance: (cs + rs + gs + ts + ns + qs + rels + ds) / 8,
     status: m.status,
     healthStatus: m.healthStatus ?? 'healthy',
@@ -374,7 +412,8 @@ export function runScheduler(
   devices: Device[],
   metricsMap: Record<string, SystemSnapshot>,
   poolDeviceIds?: string[],
-  weights: SchedulerWeights = DEFAULT_SCHEDULER_WEIGHTS
+  weights: SchedulerWeights = DEFAULT_SCHEDULER_WEIGHTS,
+  script?: string
 ): SchedulerDecision | null {
   const pool = poolDeviceIds
     ? devices.filter(d => poolDeviceIds.includes(d.deviceId))
@@ -390,9 +429,9 @@ export function runScheduler(
     const reason = eliminationReason(m, device.lastSeen);
 
     if (reason) {
-      eliminated.push(buildNodeBreakdown(device, m, weights, true, reason));
+      eliminated.push(buildNodeBreakdown(device, m, weights, true, reason, script));
     } else {
-      healthy.push(buildNodeBreakdown(device, m, weights, false));
+      healthy.push(buildNodeBreakdown(device, m, weights, false, undefined, script));
     }
   }
 

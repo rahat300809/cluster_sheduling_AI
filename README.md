@@ -6,346 +6,421 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript)](https://typescriptlang.org)
 [![Firebase](https://img.shields.io/badge/Firebase-Realtime-orange?logo=firebase)](https://firebase.google.com)
 [![C#](https://img.shields.io/badge/.NET-9-purple?logo=dotnet)](https://dotnet.microsoft.com)
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.0-purple?logo=kotlin)](https://kotlinlang.org)
+[![Jetpack Compose](https://img.shields.io/badge/Compose-UI-blue?logo=android)](https://developer.android.com/compose)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**Real-time distributed PC monitoring, remote control, and intelligent workload orchestration**
+**Real-time distributed hardware telemetry, remote administrative orchestration, AI-driven workload scheduling, and P2P compute rental hosting.**
 
-[Live Dashboard](https://cluster300809.web.app) · [Add Device](#device-pairing) · [Documentation](#documentation)
+[Live Dashboard](https://cluster300809.web.app) · [Setup Guide](#installation--setup) · [Architecture & Workflows](#system-architecture--workflows)
 
 </div>
 
 ---
 
-## Overview
-
-ClusterOS is a production-grade distributed monitoring system consisting of three key components working in unison:
-
-| Component | Technology | Purpose |
-|-----------|-----------|---------|
-| **Web Dashboard** | Next.js 16 + Firebase | Monitor, dispatch workloads, configure and manage all cluster nodes |
-| **Windows Agent** | C#/.NET 9 | Run as Windows service/Forms app, collect system metrics, execute jobs/commands |
-| **Mobile Agent** | Android (Kotlin + Compose) | Monitor node metrics and check cluster status on the go |
-
----
-
-## Downloads
-
-Download the pre-compiled clients directly to get started:
-
-- 💾 **[ClusterOS Agent (Standard) (.exe)](https://github.com/rahat300809/cluster_sheduling_AI/releases/download/v1.0.0/ClusterOSAgent.exe)** — The main Windows client for background monitoring and task execution.
-- 💾 **[ClusterOS Rental Agent (.exe)](https://github.com/rahat300809/cluster_sheduling_AI/releases/download/v1.0.0/ClusterOSRentalAgent.exe)** — Special Windows client variant tailored for compute rental monitoring.
-- 📱 **[ClusterOS Mobile Client (.apk)](https://github.com/rahat300809/cluster_sheduling_AI/releases/download/v1.0.0/ClusterOSMobileAgent.apk)** — Android application for real-time mobile monitoring.
+## 📖 Table of Contents
+1. [System Overview](#-system-overview)
+2. [Key Architecture & Core Workflows](#-key-architecture--core-workflows)
+   - [Zero-Configuration Pairing Handshake](#1-zero-configuration-pairing-handshake)
+   - [Live Multi-Sensor Telemetry & Process Pipeline](#2-live-multi-sensor-telemetry--process-pipeline)
+   - [Remote Command & Execution Pipeline](#3-remote-command--execution-pipeline)
+   - [Intelligent AI Workload Studio & Scheduler Engine](#4-intelligent-ai-workload-studio--scheduler-engine)
+   - [Compute Rental Engine & Secure Escrow Workflow](#5-compute-rental-engine--secure-escrow-workflow)
+   - [Android Mobile Agent Integration](#6-android-mobile-agent-integration)
+3. [Folder Structure & Component Mapping](#-folder-structure--component-mapping)
+4. [Firestore & Realtime Database Schemas](#-database-schemas)
+5. [Installation & Setup](#-installation--setup)
+   - [Web Dashboard Setup](#1-web-dashboard-nextjs)
+   - [Windows C# Agent Build & Service Installation](#2-windows-c-agents)
+   - [Android Kotlin Mobile Client Configuration](#3-android-kotlin-mobile-client)
+6. [Security Architecture](#-security-architecture)
+7. [Design System & UI Guidelines](#-design-system--ui)
 
 ---
 
-## Features
+## 🖥️ System Overview
 
-### 🖥️ Real-Time Monitoring
-- CPU usage per core + overall load
-- RAM usage, available memory  
-- GPU usage + VRAM utilization
-- Disk usage and throughput
-- Network upload/download speeds
-- CPU and GPU temperatures
-- All metrics update every **5 seconds**
+ClusterOS is a production-grade distributed infrastructure manager designed to aggregate heterogeneous consumer PCs into a cohesive, rent-ready compute cluster.
 
-### 🔧 Remote Control
-- **Shutdown, Restart, Sleep, Lock** — one click
-- **Kill Process** — terminate any running process
-- **Run CMD Command** — execute arbitrary shell commands
-- **Run Python Script** — dispatch Python code remotely
-- **Run EXE** — launch executables with output capture
-
-### 📊 Dashboard Pages
-1. **Command Center** — Overview with cluster KPIs, load intelligence
-2. **Devices** — All PCs with live metrics, online/offline status
-3. **Device Detail** — Real-time charts, process list, quick commands
-4. **Processes** — Cross-device process table with kill action
-5. **Commands** — Issue & track remote commands with history
-6. **Clusters** — Logical device groups with aggregate stats
-7. **Jobs** — Queue Python/batch/EXE jobs to devices or clusters
-8. **Analytics** — Load comparison, job stats, temperature charts
-9. **Settings** — Profile, security, notification preferences
-
-### 🧠 Intelligent Load Manager
-- Detects when CPU > 85% or RAM > 90%
-- Recommends routing jobs to the lowest-loaded node
-- Visual alerts on the dashboard
+| Component | Stack | Purpose | Key Files |
+| :--- | :--- | :--- | :--- |
+| **Web Dashboard** | Next.js 16 (App Router), TypeScript, Tailwind CSS, Framer Motion, Recharts, Zustand | User console to monitor nodes, run shell/python commands, schedule AI training notebooks, rent resources, and process payments | [`src/app/`](file:///f:/cluster/dashboard/src/app/), [`src/lib/`](file:///f:/cluster/dashboard/src/lib/) |
+| **Windows Agent** | C# .NET 9 Background Service / Console App, LibreHardwareMonitor, FirebaseAdmin SDK | Standard node daemon that gathers hardware sensor readings, polls pending commands, downloads Google Drive datasets, auto-installs python libraries, and streams stdout back | [`ClusterOSAgent/`](file:///f:/cluster/agent/ClusterOSAgent/) |
+| **Windows Rental Agent** | C# .NET 9 Console App, LibreHardwareMonitor, Firebase REST Integration | Special agent variant for host nodes renting their compute power. It includes a rental heartbeat sync loop and prints local logs | [`ClusterOSRentalAgent/`](file:///f:/cluster/agent/ClusterOSRentalAgent/) |
+| **Mobile Agent** | Native Android (Kotlin 2.0, Jetpack Compose, OkHttp REST client) | Light daemon to either pair as a mobile host node, view the general cluster health telemetry, or simulate compute workloads | [`mobile-agent/`](file:///f:/cluster/mobile-agent/) |
 
 ---
 
-## System Architecture & Workflow Proposal
+## ⚙️ Key Architecture & Core Workflows
 
-### High-Level System Overview
+### 1. Zero-Configuration Pairing Handshake
+
+A secure, passwordless handshake matches new physical nodes to dashboard users.
 
 ```mermaid
-graph TD
-    User["👤 Dashboard User"]
-    Dashboard["🌐 Next.js Web Dashboard"]
-    Firebase["☁️ Firebase Cloud (Firestore & Realtime DB)"]
-    Agent["🖥️ ClusterOS Windows Agent"]
-    OS["💻 Host Operating System"]
+sequenceDiagram
+    participant Agent as C# Windows/Android Agent
+    participant RTDB as Firebase Realtime DB
+    participant User as Web/Mobile Client
+    participant Firestore as Cloud Firestore
 
-    %% Flow 1: Device Pairing
-    User -->|1. Enters Pair Code| Dashboard
-    Dashboard -->|2. Validates & Claims| Firebase
-    Agent -->|3. Publishes Pair Code| Firebase
-    Firebase -->|4. Acknowledges Pairing| Agent
-
-    %% Flow 2: Live Metrics
-    Agent -->|5. Collects & Streams System Metrics| Firebase
-    Firebase -->|6. Pushes Real-Time Updates| Dashboard
-    Dashboard -->|7. Displays Live Charts & Gauges| User
-
-    %% Flow 3: Remote Operations & Jobs
-    User -->|8. Submits Job or Command| Dashboard
-    Dashboard -->|9. Dispatches Execution Task| Firebase
-    Agent -->|10. Pulls Pending Tasks| Firebase
-    Agent -->|11. Executes Operations| OS
-    OS -->|12. Returns Logs & Exit Status| Agent
-    Agent -->|13. Streams Logs & Results| Firebase
-    Firebase -->|14. Shows Output & Completion| Dashboard
+    Note over Agent: 1. Generate local UUID (deviceId)<br/>If device.json doesn't exist
+    Agent->>RTDB: 2. Write /pairCodes/{pairCode} = {"deviceId": deviceId, "status": "waiting"}
+    Note over User: 3. User logs in & inputs 6-character {pairCode}
+    User->>Firestore: 4. Check auth & create document /devices/{deviceId} with {"ownerId": uid, "paired": true}
+    User->>RTDB: 5. Delete pair code /pairCodes/{pairCode} (Single-use consume)
+    Note over Agent: 6. Agent polls status or detects deletion
+    Agent->>RTDB: 7. Set /devices/{deviceId}/paired = true
+    Note over Agent: 8. Local write to device.json. Transitions to Telemetry Mode.
 ```
-
-### End-to-End System Work Process
-
-The ClusterOS platform consists of several asynchronous workflows connecting the Web Dashboard, Windows C# Agents, Firebase Realtime Database, Firestore, and the Android Mobile Client. Below is the detailed step-by-step description of the system's operational work processes:
-
-#### 1. Zero-Configuration Handshake & Secure Device Pairing
-To register and link a new machine to a user account securely without manual credential entry:
-1. **Hardware Footprint Generation**: Upon starting, the Windows Agent checks for a local `device.json` file. If none is found, it queries the hardware details (CPU UUID, Motherboard Serial, MAC address) to generate a unique persistent `deviceId`.
-2. **Pairing Code Creation**: The agent generates a random 6-character single-use alphanumeric pair code (e.g., `XK7M9P`) and uploads it to Firebase RTDB under `/pairCodes/{code}` with a state of `{"deviceId": "PC-...", "status": "waiting"}`.
-3. **Dashboard/Mobile Claiming**: The authenticated user signs in to the Next.js Dashboard or Android Mobile App, goes to the "Add Device" view, and enters the pairing code.
-4. **Firestore Handshake & Database Cleanup**: Firestore security rules validate that the user is authenticated. It claims the device by updating `/devices/{deviceId}` in Firestore with `ownerId = {uid}` and `paired = true`. The system then deletes the temporary pair code from `/pairCodes/{code}` to prevent reuse.
-5. **Agent State Upgrade**: The C# Agent, which listens to changes on its own status, detects the pairing completion. It writes the configuration locally to `device.json` and upgrades its execution state from Pairing Mode to Telemetry Mode.
-
-#### 2. Live Multi-Sensor Telemetry & Process Pipeline
-Telemetry runs continuously to feed real-time resource data to the user interfaces with minimal latency:
-1. **Hardware Metrics Scraped**: Every 5 seconds, the Windows Agent uses native APIs and `LibreHardwareMonitorLib` to query sensor data:
-   - **CPU**: Core-by-core load, aggregate load, and package temperature.
-   - **Memory**: Total, used, and free RAM.
-   - **GPU**: Core utilization, VRAM usage, and GPU temperature.
-   - **Disk**: IO throughput and partition space usage.
-   - **Network**: Real-time upload and download speeds.
-2. **Top Processes Tracked**: The agent queries active operating system processes, retrieves their memory and CPU utilization, and sorts them to find the top 20 resource-heavy processes.
-3. **Realtime Database Synchronization**: The collected metrics and process lists are serialized to JSON and pushed directly to Firebase RTDB under `/devices/{deviceId}/metrics` and `/devices/{deviceId}/processes`.
-4. **Reactive UI Binding**: The Next.js dashboard and Android Mobile App maintain active WebSocket-like listeners on the database paths. The moment the database updates, the UI instantly updates its charts, metric gauges, and process tables without polling.
-
-#### 3. Remote Operations & Command Pipeline
-Administrative operations are routed and executed asynchronously with real-time feedback:
-1. **Action Triggered**: The user clicks a power command (Shutdown, Restart, Sleep, Lock), terminates a process, or inputs a shell command/script on the dashboard or mobile app.
-2. **Task Queueing**: The command details (command type, script payload, timestamp) are written to `/devices/{deviceId}/pendingCommands/{commandId}` in the Realtime Database.
-3. **Agent Polling & Interception**: The Windows Agent runs a background polling handler that checks the database queue every 2 seconds.
-4. **Command Execution**: Upon pulling a command, the Agent spawns a child process using `System.Diagnostics.Process` with administrative privileges. It redirects the standard output (`stdout`) and standard error (`stderr`) streams.
-5. **Console Log Streaming**: As the child process runs, the C# Agent captures output streams line-by-line and streams them immediately back to the `/devices/{deviceId}/commandResults/{commandId}` database endpoint.
-6. **Cleanup**: Once execution completes, the final exit code is uploaded, the temporary pending command is deleted, and the UI displays the successful completion log.
-
-#### 4. Intelligent AI Workload Studio & Least-Loaded Scheduling
-When executing complex python or automated batch jobs across a cluster of PCs:
-1. **Job Composition**: Users draft Python scripts or automation routines inside the Monaco Code Editor on the dashboard, complete with syntax highlighting and editor configurations.
-2. **Resource Load Evaluation**: When the user clicks "Run Job", the scheduler queries the live telemetry metrics of all active and online nodes in the target cluster.
-3. **Intelligent Load Balancing**: The system evaluates each node's load using a weighted formula combining CPU usage (weight 40%), RAM usage (weight 30%), GPU usage (weight 20%), and Temperature state (weight 10%). The node with the lowest calculated load is automatically designated as the target.
-4. **Job Dispatch**: The script is compiled and pushed as an execution task to the selected node's queue.
-5. **Dynamic Dependency Setup**: The C# Agent on the target machine receives the script, automatically detects missing python package dependencies, runs `pip install` in a subprocess, streams the installer progress live to the user, and then runs the python script.
-
-#### 5. Native Android Mobile Client Workflow
-The Android app enables convenient monitoring of the cluster from mobile devices:
-1. **User Authentication**: Integrates with Firebase Auth, logging in users using email/password.
-2. **Device Discovery**: The app queries Firestore for all device documents owned by the logged-in user.
-3. **Active Telemetry Binding**: Using the Firebase Android Kotlin SDK, the app binds directly to RTDB endpoints for each device, allowing live updates of system health graphs, charts, and process lists designed in a mobile-optimized layout using Jetpack Compose.
 
 ---
 
-## Quick Start
+### 2. Live Multi-Sensor Telemetry & Process Pipeline
 
-### Dashboard
+Every **5 seconds**, C# agents scrape system parameters and push them to the Realtime Database. 
 
-The dashboard is already deployed at: **https://cluster300809.web.app**
+- **Scrapers**: Native Windows Performance Counters + `LibreHardwareMonitorLib` handles CPU Package/Core Temperatures, GPU Usage, and Fan Speeds.
+- **Process Aggregator**: The agent retrieves all active processes, compiles CPU% and RamMB, sorts them, and uploads the top 20 resource-heavy entries to `/devices/{deviceId}/processes`.
+- **Reactive UI**: Next.js dashboard uses Firebase `onValue` sockets to update metric gauges, graphs, and system charts instantly without HTTP polling.
 
-To run locally:
+---
 
-```bash
-cd dashboard
-npm install
-npm run dev
-# Open http://localhost:3000
+### 3. Remote Command & Execution Pipeline
+
+Users can issue administrative actions directly from the dashboard:
+
+```mermaid
+flowchart TD
+    UI[👤 User clicks Command on Dashboard] -->|Write command payload| RTDB_Pending[Database: pendingCommands/COMMAND_ID]
+    Agent[🖥️ C# Agent polling loop] -->|Retrieves command every 2s| RTDB_Pending
+    Agent -->|1. Redirects stdout/stderr streams| Proc[Spawns process: CMD/PowerShell/EXE/Python]
+    Proc -->|2. Lines captured in real-time| Stream[Append logs to RTDB: jobOutput/COMMAND_ID/line_idx]
+    Stream -->|3. UI listens to log path| UI_Logs[Monaco Terminal Output Logs]
+    Proc -->|4. Exits with code| Results[Write status to RTDB: commandResults/COMMAND_ID]
+    Results -->|5. Clean up queue| Cleanup[Delete pendingCommands/COMMAND_ID]
 ```
 
-### Windows Agent
+---
+
+### 4. Intelligent AI Workload Studio & Scheduler Engine
+
+The scheduling engine ([scheduler.ts](file:///f:/cluster/dashboard/src/lib/scheduler.ts)) is inspired by Kubernetes and Slurm, utilizing a weighted scoring formula to route jobs to the most suitable node in a cluster.
+
+#### Scoring Formula
+$$\text{Score} = 0.30 \cdot \text{CPU} + 0.20 \cdot \text{RAM} + 0.10 \cdot \text{GPU} + 0.10 \cdot \text{Temp} + 0.10 \cdot \text{Network} + 0.10 \cdot \text{Queue} + 0.05 \cdot \text{Reliability} + 0.05 \cdot \text{Disk}$$
+
+#### Core Constraints & Elimination Filter
+Before a node is scored, it passes through an **Elimination Filter**. A node is eliminated from scheduling if:
+- The node is **offline** or has missed its heartbeat timeout (**45 seconds**).
+- CPU temperature $\ge 90^\circ\text{C}$ or GPU temperature $\ge 95^\circ\text{C}$.
+- RAM usage $\ge 95\%$ or Disk usage $\ge 95\%$.
+- Active waiting queue $\ge 20$ tasks.
+
+#### Colab-Style Training Notebooks
+Under the **Notebook Studio**, users run multi-cell python executions with dataset mounting:
+1. Upload `.csv` or other datasets to Firebase Storage or link a public/private Google Drive file.
+2. The scheduler decides the optimal destination machine.
+3. The destination agent downloads the code, resolves missing imports by parsing `import` statements, automatically triggers `pip install`, and streams execution output.
+
+---
+
+### 5. Compute Rental Engine & Secure Escrow Workflow
+
+Hosts can list standard PCs or mobile devices in the shared hosting pool. Renters pay to gain exclusive workspace access.
+
+#### Payment and Session Lifecycle
+- **Modes**: 
+  - **Fixed Timer**: Renter pre-selects minutes (e.g. 15, 30, 45, 60 min).
+  - **Pay-As-You-Go**: Runs indefinitely until stopped.
+- **Accrual Logic**: The active session state (`elapsedSeconds`, `earnedBalance`) is calculated and synced back to the database every 2 seconds by the hosting agent.
+- **Auto-Checkout Safeguard**: When a fixed session's timer expires, the dashboard's hosting listener triggers `handleCompleteSession` to transfer the earned amount into the host's balance. A security guard ensures only the host's client handles this call to prevent duplicate balance updates from multiple listeners.
+- **Host Penalty (Violation)**: If a host agent shuts down, exits prematurely, or disconnects during a running session, the renter can trigger a **Host Violation Termination**, terminating the rental session cleanly and penalizing the host.
+- **Host Withdraw Flow**: Service providers request withdrawals using the dashboard's withdraw console. Clicking "Request Withdraw" prompts a modal supporting fractional amount select (25%, 50%, 75%, MAX). Deductions are calculated using floating-point precision and saved in Firestore.
+
+---
+
+### 6. Android Mobile Agent Integration
+
+The Android Mobile Agent ([mobile-agent/](file:///f:/cluster/mobile-agent/)) serves a dual role:
+- **Hosting Node**: Allows turning on a **Rental Hosting Console** switch to register the mobile device (`MOB-...` key prefix) as a cluster node, pushing battery levels, CPU usage, RAM usage, and online status to the dashboard via lightweight HTTP REST requests.
+- **Python Simulator**: Since Android devices lack a native Python interpreter, the app incorporates a custom **ML Script Simulator** in [`AgentService.kt`](file:///f:/cluster/mobile-agent/app/src/main/java/com/example/clusterosmobileagent/service/AgentService.kt). 
+  - It parses script structures and detects data imports (`pandas`, `scikit-learn`, `numpy`, `tensorflow`, `torch`).
+  - It simulates data preparation, train/test splitting, ML model training (LogisticRegression, RandomForest, Neural Networks), accuracy calculation, and model prediction output, streaming simulated standard logs to the dashboard console.
+
+---
+
+## 📂 Folder Structure & Component Mapping
+
+```
+f:\cluster\
+├── dashboard/                      ← Next.js 16 Web Dashboard Application
+│   ├── src/
+│   │   ├── app/
+│   │   │   └── (dashboard)/        ← Dashboard App Router Pages
+│   │   │       ├── analytics/      ← Recharts-driven cluster loads & usage metrics
+│   │   │       ├── clusters/       ← Logical device grouping (create, rename, add nodes)
+│   │   │       ├── commands/       ← Action history tracker & raw cmd terminal
+│   │   │       ├── device/         ← Detailed dashboard for individual PC charts
+│   │   │       ├── devices/        ← Grid view of standard & rental nodes
+│   │   │       ├── jobs/           ← Script dispatch wizard & scheduler config
+│   │   │       ├── notebook/       ← Colab-like Python training workspace with datasets
+│   │   │       ├── page.tsx        ← Command Center / KPI overview page
+│   │   │       ├── rentals/        ← Rental host/renter session manager & payouts
+│   │   │       └── settings/       ← Profile configurations & notifications
+│   │   ├── components/             ← Shared components (charts, modals, layout)
+│   │   ├── hooks/                  ← useAuth for session state
+│   │   ├── lib/                    ← db (Firestore), rtdb (Realtime), scheduler (AI engine)
+│   │   ├── store/                  ← Zustand global store (appStore.ts)
+│   │   └── types/                  ← TypeScript interface schemas (index.ts)
+│   ├── public/                     ← Public assets & client downloads
+│   └── package.json
+│
+├── agent/
+│   ├── ClusterOSAgent/             ← C# Windows Service Agent
+│   │   ├── Hardware/               ← PerformanceCounter & LibreHardwareMonitor wrappers
+│   │   ├── Firebase/               ← Firebase SDK client configurations
+│   │   ├── Commands/               ← CommandHandler (polling) & CommandExecutor (execution)
+│   │   └── Models/                 ← C# Class Schemas matching TypeScript types
+│   │
+│   ├── ClusterOSRentalAgent/       ← C# Compute Host Rental Agent
+│   │   ├── Commands/               ← CommandExecutor with -W ignore Python flags
+│   │   └── Models/                 ← Models for rental sessions and metrics
+│   │
+│   └── installer/                  ← Inno Setup Script (.iss) to compile Windows installers
+│
+├── mobile-agent/                   ← Native Android Application
+│   └── app/src/main/java/com/example/clusterosmobileagent/
+│       ├── service/                ← AgentService (REST API heartbeat & ML Python simulator)
+│       └── ui/main/                ← MainScreen (Jetpack Compose interface)
+│
+├── firebase/                       ← Firebase Project Configurations
+│   ├── firestore.rules             ← Strict document-level security rules
+│   └── database.rules.json         ← RTDB path-level permissions
+│
+└── README.md                       ← Project guide
+```
+
+---
+
+## 🗄️ Database Schemas
+
+### 1. Cloud Firestore
+
+#### `users` Collection
+Stores registered dashboard profiles.
+```typescript
+{
+  uid: string;
+  email: string;
+  role: 'admin' | 'operator' | 'viewer';
+  balance: number; // currency for P2P rentals (৳ Tk)
+  createdAt: number;
+}
+```
+
+#### `devices` Collection
+Maintains device pairing status and owner linkage.
+```typescript
+{
+  deviceId: string;
+  pairCode: string;
+  name: string;
+  machineName: string;
+  ownerId: string;
+  clusterId?: string;
+  paired: boolean;
+  type: 'standard' | 'rental';
+  rentalStatus: 'idle' | 'rented';
+  rentalSessionId?: string | null;
+  createdAt: number;
+}
+```
+
+#### `withdrawals` Collection
+Records payment requests completed by hosts.
+```typescript
+{
+  userId: string;
+  email: string;
+  amount: number;
+  status: 'completed';
+  createdAt: number;
+}
+```
+
+---
+
+### 2. Realtime Database
+
+RTDB acts as the high-frequency message bus between agents and dashboards.
+
+```json
+{
+  "devices": {
+    "DEVICE_ID": {
+      "metrics": {
+        "timestamp": 1782349000,
+        "cpu": { "total": 45.2, "cores": [40, 50, 42, 48], "name": "Intel Core i7-12700H" },
+        "ram": { "usedPercent": 62.1, "used": 9.9, "total": 16.0 },
+        "gpu": { "usagePercent": 12.0, "memUsedPercent": 35.0, "name": "NVIDIA RTX 3060" },
+        "disk": { "usedPercent": 48.0, "readMbps": 1.2, "writeMbps": 0.4 },
+        "network": { "uploadMbps": 4.5, "downloadMbps": 45.0, "latencyMs": 12 },
+        "temperatures": { "cpu": 65, "gpu": 68 },
+        "status": "online",
+        "batteryPercent": 85,
+        "healthStatus": "healthy"
+      },
+      "processes": [
+        { "pid": 4812, "name": "chrome.exe", "cpuPercent": 12.4, "ramMB": 420, "status": "running" }
+      ],
+      "pendingCommands": {
+        "COMMAND_ID": {
+          "type": "run_script",
+          "payload": { "script": "import pandas as pd\n..." },
+          "issuedAt": 1782349050
+        }
+      },
+      "commandResults": {
+        "COMMAND_ID": {
+          "status": "success",
+          "output": "Accuracy: 1.0\nPrediction: [1]",
+          "completedAt": 1782349080
+        }
+      },
+      "activeRentalSession": {
+        "sessionId": "SESSION_ID",
+        "status": "running",
+        "mode": "fixed",
+        "hourlyRate": 100,
+        "durationMinutes": 30,
+        "startTime": 1782349000,
+        "elapsedSeconds": 120,
+        "earnedBalance": 3.33
+      }
+    }
+  },
+  "pairCodes": {
+    "XK7M9P": {
+      "deviceId": "PC-A1B2C3",
+      "machineName": "DESKTOP-WORKSTATION",
+      "status": "waiting"
+    }
+  }
+}
+```
+
+---
+
+## 🚀 Installation & Setup
+
+### 1. Web Dashboard (Next.js)
 
 #### Prerequisites
-- [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0)
+- **Node.js** v18+ and **npm** v10+
+
+#### Setup Instructions
+1. Navigate to the dashboard directory:
+   ```bash
+   cd dashboard
+   ```
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+3. Create a `.env.local` file in `dashboard/` with your Firebase environment parameters:
+   ```env
+   NEXT_PUBLIC_FIREBASE_API_KEY="your-api-key"
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN="your-auth-domain"
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID="cluster300809"
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET="cluster300809.appspot.com"
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID="your-sender-id"
+   NEXT_PUBLIC_FIREBASE_APP_ID="your-app-id"
+   NEXT_PUBLIC_FIREBASE_DATABASE_URL="https://cluster300809-default-rtdb.firebaseio.com"
+   ```
+4. Spin up the local development web server:
+   ```bash
+   npm run dev
+   ```
+5. Open your browser and navigate to `http://localhost:3000`.
+
+---
+
+### 2. Windows C# Agents
+
+The agent can be built and run either as a manual console application or installed as a persistent Windows Service.
+
+#### Prerequisites
+- **.NET 9.0 SDK** or later
 - Windows 10/11 64-bit
-- Administrator privileges (for hardware monitoring)
 
-#### Build from Source
-
+#### Build Standard Agent
 ```powershell
 cd agent\ClusterOSAgent
 dotnet restore
 dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ../../dist/agent
 ```
 
-#### Install as Windows Service
-
+#### Build Rental Agent
 ```powershell
-# Copy the published binary to install directory
-Copy-Item ../../dist/agent/ClusterOSAgent.exe "C:\Program Files\ClusterOS\"
-Copy-Item appsettings.json "C:\Program Files\ClusterOS\"
-
-# Install as service
-sc create "ClusterOS Agent" binPath= "C:\Program Files\ClusterOS\ClusterOSAgent.exe" start= auto
-sc description "ClusterOS Agent" "Distributed PC monitoring agent"
-sc start "ClusterOS Agent"
+cd agent\ClusterOSRentalAgent
+dotnet restore
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o ../../dist/rental-agent
 ```
 
-#### Or Use the Installer
-Build and run `agent/installer/ClusterOSAgent.iss` with [Inno Setup 6](https://jrsoftware.org/isdl.php).
+#### Running and Configuration
+On first launch, the agent creates a `device.json` file in its current directory:
+```json
+{
+  "DeviceId": "PC-RNT-A1B2C3",
+  "PairCode": "XK7M9P",
+  "MachineName": "DESKTOP-HOST",
+  "IsPaired": false,
+  "IsRegistered": true
+}
+```
+Ensure you provide a valid `appsettings.json` file with your Firebase Database URL, API Key, and Project ID before launching.
 
 ---
 
-## Device Pairing
+### 3. Android Kotlin Mobile Client
 
-1. **Start the agent** on the Windows PC you want to monitor
-2. On first launch, the agent prints:
+#### Build Requirements
+- **Android Studio Ladybug** or later
+- **JDK 17**
+- **Android SDK 34** (API 34)
+
+#### Compilation Steps
+1. Open the `/mobile-agent` directory in Android Studio.
+2. Ensure internet access is enabled so Gradle can sync and pull dependencies (such as Jetpack Compose, OkHttp, and Google Play Services).
+3. Connect an Android phone with USB Debugging enabled, or boot up an AVD emulator.
+4. Click **Run** or use the Gradle task:
+   ```bash
+   ./gradlew assembleDebug
    ```
-   ═══════════════════════════════════════
-       ClusterOS Agent - First Launch      
-   ═══════════════════════════════════════
-     Device ID:  PC-A1B2C3
-     Pair Code:  XK7M9P
-   ═══════════════════════════════════════
-   ```
-3. **Open the Dashboard** → Devices → **Add Device**
-4. **Enter the Pair Code** — device is now linked to your account
-5. Metrics start flowing within 5 seconds ✅
+5. The generated APK will be located at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ---
 
-## Firebase Setup
+## 🔒 Security Architecture
 
-The project uses Firebase project `cluster300809`.
+ClusterOS secures compute resources and user data through multi-layered safeguards:
 
-### Deploy Firestore Rules
-```bash
-firebase deploy --only firestore:rules
-```
-
-### Deploy RTDB Rules
-```bash
-firebase deploy --only database
-```
-
-### Deploy Dashboard
-```bash
-cd dashboard
-npm run build
-firebase deploy --only hosting
-```
+- **Firebase Authentication**: Ensures only authorized users access dashboard pages and device terminals.
+- **Granular Security Rules**:
+  - **Firestore Rules**: Restricts document reads and writes. Users can only fetch and update devices and clusters linked to their unique `ownerId`.
+  - **RTDB Rules**: Enforces that only paired agents and authenticated owners can read or write metrics and command objects under their respective `/devices/{deviceId}` paths.
+- **Pair Code Self-Destruction**: Pairing codes are deleted from `/pairCodes/{code}` instantly once consumed, preventing session hijacking or replay attacks.
+- **Command Scoping**: Power state functions and processes are restricted to the validated owner of that machine, preventing unauthorized execution.
 
 ---
 
-## Folder Structure
+## 🎨 Design System & UI
 
-```
-f:\cluster\
-├── dashboard/               ← Next.js 15 web app
-│   ├── src/
-│   │   ├── app/             ← App Router pages (10 pages)
-│   │   ├── components/      ← UI components
-│   │   │   ├── layout/      ← Sidebar, TopBar
-│   │   │   └── charts/      ← MetricGauge, MiniSparkline
-│   │   ├── lib/             ← Firebase, Firestore, RTDB helpers
-│   │   ├── hooks/           ← AuthProvider, useAuth
-│   │   ├── store/           ← Zustand global state
-│   │   └── types/           ← TypeScript interfaces
-│   └── package.json
-│
-├── agent/
-│   ├── ClusterOSAgent/      ← C# Windows Agent
-│   │   ├── Program.cs
-│   │   ├── AgentService.cs
-│   │   ├── Hardware/        ← HardwareMonitor, ProcessMonitor
-│   │   ├── Firebase/        ← FirebaseClient, RealtimeDbClient
-│   │   ├── Commands/        ← CommandHandler, CommandExecutor
-│   │   ├── Models/          ← All data models
-│   │   └── appsettings.json
-│   └── installer/
-│       └── ClusterOSAgent.iss  ← Inno Setup installer
-│
-├── firebase/
-│   ├── firestore.rules      ← Firestore security rules
-│   └── database.rules.json  ← RTDB security rules
-│
-└── README.md
-```
-
----
-
-## Firestore Schema
-
-| Collection | Document | Key Fields |
-|------------|----------|------------|
-| `users` | `{uid}` | email, role, createdAt |
-| `devices` | `{deviceId}` | deviceId, pairCode, ownerId, paired |
-| `clusters` | `{clusterId}` | name, deviceIds[], ownerId, color |
-| `jobs` | `{jobId}` | name, type, script, status, targetDeviceIds |
-| `commands` | `{commandId}` | type, payload, status, issuedBy, output |
-
-## Realtime Database Schema
-
-```
-/devices/{deviceId}/
-  metrics/          ← SystemSnapshot (every 5s)
-  processes/        ← Top 20 processes
-  pendingCommands/  ← Commands awaiting execution
-  commandResults/   ← Completed command outputs
-/pairCodes/{code}/  ← Single-use device pairing codes
-```
-
----
-
-## Security
-
-- ✅ Firebase Authentication required for all dashboard access
-- ✅ Firestore rules: users can only access their own devices
-- ✅ RTDB rules: authenticated write access
-- ✅ Pair codes are **single-use** — deleted after pairing
-- ✅ Protected routes via `AuthProvider`
-- ✅ Commands are scoped to device owner
-
----
-
-## Design System
-
-- **Style**: OLED Dark Mode (Deep black `#020617`)
-- **Accent**: Green `#22c55e` for active/healthy states
-- **Font**: Plus Jakarta Sans
-- **Effects**: Glassmorphism cards with `backdrop-blur`
-- **Charts**: Recharts (area, bar, radial gauge)
-- **Icons**: Lucide React
-- **Animation**: Framer Motion (150–300ms transitions)
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16, TypeScript, Tailwind CSS |
-| UI Components | Radix UI primitives, Lucide icons |
-| Animation | Framer Motion |
-| Charts | Recharts |
-| State | Zustand |
-| Auth | Firebase Authentication |
-| Database | Cloud Firestore + Realtime Database |
-| Hosting | Firebase Hosting |
-| Agent | C# .NET 9, Windows Service |
-| Hardware | LibreHardwareMonitor |
-| Installer | Inno Setup 6 |
-
----
-
-## License
-
-MIT © ClusterOS
+- **Color Theme**: Deep OLED Space Dark (`#020617` background with `#0f172a` cards).
+- **Core Accents**: Radiant Emerald Green (`#22c55e`) for online/active metrics, Amber (`#f59e0b`) for active rental timers, and Crimson (`#ef4444`) for critical heat alerts.
+- **Typography**: Plus Jakarta Sans / Inter for clear metric scanning, and Fira Code / JetBrains Mono for system log terminals.
+- **Libraries**:
+  - **Recharts**: Responsive area and radial charts depicting real-time historical usage.
+  - **Framer Motion**: Smooth entry layouts (150ms transitions) and micro-interactions on hover.
+  - **Lucide Icons**: Consistent, light icon set matching all hardware sensors and actions.

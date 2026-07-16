@@ -29,6 +29,10 @@
           ".read": "auth != null",
           ".write": true
         },
+        "jobArtifacts": {
+          ".read": "auth != null",
+          ".write": true
+        },
         "activeRentalSession": {
           ".read": true,
           ".write": true

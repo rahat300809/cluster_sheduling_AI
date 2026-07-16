@@ -18,7 +18,7 @@ import {
 } from 'firebase/firestore';
 import { db, rtdb } from './firebase';
 import { ref, set } from 'firebase/database';
-import type { Device, Cluster, Job, Command, UserProfile, CommandType } from '@/types';
+import type { Device, Cluster, Job, Command, UserProfile, CommandType, Notebook, NotebookDatasetFile } from '@/types';
 
 /** Firestore rejects undefined and NaN — strip/replace before writes. */
 export function sanitizeForFirestore<T>(value: T): T {
@@ -261,6 +261,14 @@ export async function updateJobStatus(jobId: string, status: Job['status'], outp
   await updateDoc(doc(db, 'jobs', jobId), updates);
 }
 
+export async function deleteJob(jobId: string): Promise<void> {
+  await deleteDoc(doc(db, 'jobs', jobId));
+}
+
+export async function updateJobArtifacts(jobId: string, artifacts: Job['artifacts']): Promise<void> {
+  await updateDoc(doc(db, 'jobs', jobId), { artifacts: sanitizeForFirestore(artifacts) });
+}
+
 // ─── Command Helpers ──────────────────────────────────────────────────────────
 
 export async function getCommands(ownerId: string, limit = 50): Promise<Command[]> {
@@ -409,6 +417,16 @@ export async function getUserBalance(uid: string): Promise<number> {
   return snap.data().balance ?? 0;
 }
 
+export function subscribeUserBalance(uid: string, callback: (balance: number) => void) {
+  return onSnapshot(doc(db, 'users', uid), snap => {
+    if (snap.exists()) {
+      callback(snap.data().balance ?? 0);
+    } else {
+      callback(0);
+    }
+  });
+}
+
 export async function addHostBalance(uid: string, amount: number): Promise<void> {
   const userRef = doc(db, 'users', uid);
   const snap = await getDoc(userRef);
@@ -418,3 +436,39 @@ export async function addHostBalance(uid: string, amount: number): Promise<void>
     balance: parseFloat((currentBalance + amount).toFixed(2))
   });
 }
+
+// ─── Notebook Helpers ─────────────────────────────────────────────────────────
+
+export async function createNotebook(notebook: Omit<Notebook, 'id'>): Promise<string> {
+  const notebookId = `nb_${Date.now()}_${Math.random().toString(36).substr(2, 8)}`;
+  await setDoc(doc(db, 'notebooks', notebookId), sanitizeForFirestore(notebook));
+  return notebookId;
+}
+
+export async function getNotebooks(ownerId: string, limit = 50): Promise<Notebook[]> {
+  const q = query(collection(db, 'notebooks'), where('ownerId', '==', ownerId));
+  const snap = await getDocs(q);
+  return snap.docs
+    .map(d => ({ id: d.id, ...d.data() } as Notebook))
+    .sort((a, b) => b.createdAt - a.createdAt)
+    .slice(0, limit);
+}
+
+export function subscribeNotebooks(ownerId: string, callback: (notebooks: Notebook[]) => void) {
+  const q = query(collection(db, 'notebooks'), where('ownerId', '==', ownerId));
+  return onSnapshot(q, snap => {
+    const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as Notebook));
+    list.sort((a, b) => b.createdAt - a.createdAt);
+    callback(list);
+  });
+}
+
+export async function updateNotebook(notebookId: string, updates: Partial<Notebook>): Promise<void> {
+  await updateDoc(doc(db, 'notebooks', notebookId), sanitizeForFirestore(updates));
+}
+
+export async function deleteNotebook(notebookId: string): Promise<void> {
+  await deleteDoc(doc(db, 'notebooks', notebookId));
+}
+
+

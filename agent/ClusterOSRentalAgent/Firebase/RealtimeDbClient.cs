@@ -136,6 +136,15 @@ public class RealtimeDbClient
         await DeleteAsync($"/devices/{deviceId}/jobOutput/{commandId}.json");
     }
 
+    public async Task PublishJobArtifactsAsync(string deviceId, string commandId, List<Dictionary<string, object>> artifacts)
+    {
+        var json = JsonConvert.SerializeObject(artifacts, new JsonSerializerSettings
+        {
+            ContractResolver = new Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
+        });
+        await PutAsync($"/devices/{deviceId}/jobArtifacts/{commandId}.json", json);
+    }
+
     public async Task RegisterPairCodeAsync(string deviceId, string pairCode, string machineName)
     {
         var payload = JsonConvert.SerializeObject(new

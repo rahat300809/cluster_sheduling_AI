@@ -172,6 +172,8 @@ export interface NodeScoreBreakdown {
   diskWriteMbps: number;
   downloadMbps: number;
   uploadMbps: number;
+  gpuMemTotal: number;    // GPU VRAM in MB (0 = no dedicated GPU)
+  gpuName: string;        // GPU hardware name for display
   cpuScore: number;
   ramScore: number;
   gpuScore: number;
@@ -228,6 +230,13 @@ export interface Job {
   priority?: number;
   forceWork?: boolean;
   aiReport?: SchedulerDecision;
+  notebookId?: string;
+  artifacts?: JobArtifact[]; // Saved artifacts for this job
+  // Distributed training fields
+  distributedSessionId?: string;  // Links to a DistributedTrainingSession
+  shardIndex?: number;            // 0-based shard index for this node
+  totalShards?: number;           // Total number of nodes/shards
+  isDistributed?: boolean;        // Flags this as part of a distributed run
 }
 
 // ─── Command Types ────────────────────────────────────────────────────────────
@@ -293,3 +302,87 @@ export interface LoadRecommendation {
   targetCpuPercent: number;
   targetRamPercent: number;
 }
+
+// ─── Notebook Types (Colab-like Training Studio) ──────────────────────────────
+
+export interface NotebookDatasetFile {
+  name: string;           // Original filename
+  storagePath: string;    // Firebase Storage path
+  downloadUrl: string;    // Signed download URL
+  size: number;           // Bytes
+  type: string;           // MIME type
+  uploadedAt: number;     // Unix ms timestamp
+  accessToken?: string;   // Google Drive API download token
+}
+
+export type NotebookStatus = 'idle' | 'uploading' | 'queued' | 'installing' | 'running' | 'completed' | 'failed';
+
+export interface Notebook {
+  id: string;
+  name: string;
+  ownerId: string;
+  code: string;           // Python script content
+  datasets: NotebookDatasetFile[];
+  targetMode: 'cluster' | 'dedicated';
+  targetClusterId?: string;
+  targetDeviceId?: string;
+  status: NotebookStatus;
+  forceWork: boolean;
+  createdAt: number;
+  lastRunAt?: number;
+  lastOutput?: string;
+  lastJobId?: string;     // Link to the dispatched job
+  aiReport?: SchedulerDecision;
+}
+
+// ─── Job Artifact Types (Model Downloads) ──────────────────────────────────
+
+export interface JobArtifact {
+  name: string;           // Filename (e.g. "model.pkl", "results.csv")
+  storagePath: string;    // Firebase Storage path
+  downloadUrl: string;    // Direct download URL with token
+  size: number;           // Bytes
+  uploadedAt: number;     // Unix ms timestamp
+}
+
+// ─── Distributed Training Types ────────────────────────────────────────────────
+
+export type DistributedSessionStatus =
+  | 'configuring'
+  | 'launching'
+  | 'running'
+  | 'aggregating'
+  | 'completed'
+  | 'failed'
+  | 'partial';
+
+export interface DistributedNodeStatus {
+  deviceId: string;
+  deviceName: string;
+  jobId: string;
+  shardIndex: number;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  progress: number;       // 0–100 estimated from output parsing
+  lastLine?: string;      // Last output line from this node
+  artifacts?: JobArtifact[];
+  startedAt?: number;
+  completedAt?: number;
+}
+
+export interface DistributedTrainingSession {
+  id: string;
+  notebookId: string;
+  notebookName: string;
+  ownerId: string;
+  deviceIds: string[];          // All participating device IDs
+  totalShards: number;          // == deviceIds.length
+  jobIds: string[];             // One job per device
+  status: DistributedSessionStatus;
+  nodeStatuses: DistributedNodeStatus[];
+  createdAt: number;
+  launchedAt?: number;
+  completedAt?: number;
+  strategy: 'data_parallel';    // Future: 'model_parallel'
+  aggregatedArtifacts?: JobArtifact[];
+}
+

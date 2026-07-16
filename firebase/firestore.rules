@@ -76,5 +76,13 @@ service cloud.firestore {
       allow update: if isAuthenticated();
       allow delete: if isAuthenticated();
     }
+
+    // ─── Notebooks (Colab-like Training Studio) ─────────────────────────────
+    match /notebooks/{notebookId} {
+      allow read: if isAuthenticated() && isOwner(resource.data.ownerId);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isOwner(resource.data.ownerId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.ownerId);
+    }
   }
 }

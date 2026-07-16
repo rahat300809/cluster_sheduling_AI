@@ -8,6 +8,7 @@ import {
   updateRentalSessionFirestore, 
   subscribeUserRentals, 
   getUserBalance, 
+  subscribeUserBalance,
   addHostBalance, 
   RentalSessionData 
 } from '@/lib/db';
@@ -111,8 +112,10 @@ export default function RentalsPage() {
   useEffect(() => {
     if (!user) return;
     
-    // Fetch host balance
-    getUserBalance(user.uid).then(bal => setHostBalance(bal));
+    // Subscribe to host balance
+    const unsubBalance = subscribeUserBalance(user.uid, (bal) => {
+      setHostBalance(bal);
+    });
 
     // Subscribe to host's rentals (where they are the owner)
     const unsubHost = subscribeUserRentals(user.uid, 'owner', (sessions) => {
@@ -125,6 +128,7 @@ export default function RentalsPage() {
     });
 
     return () => {
+      unsubBalance();
       unsubHost();
       unsubRenter();
     };

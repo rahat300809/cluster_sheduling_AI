@@ -180,7 +180,9 @@ export default function JobsPage() {
     const devName = dev?.name || dev?.machineName || deviceId;
     if (ownerId) await createCommandRecord(cmdId, deviceId, devName, 'run_script', { script: code, forceWork }, ownerId);
     await dispatchCommandToDevice(deviceId, cmdId, 'run_script', { script: code, forceWork });
-    await updateJobStatus(jobId, 'running');
+    // NOTE: Do NOT set job status to 'running' here — the agent drives the status lifecycle
+    // (queued → installing → running → completed/failed) via subscribeCommandResult callbacks.
+    // Setting it prematurely here caused a race condition where failed dispatches showed as 'running'.
 
     const timeoutTimer = setTimeout(async () => {
       unsubResult();
@@ -336,6 +338,7 @@ export default function JobsPage() {
           deviceId: d.deviceId,
           deviceName: d.name || d.machineName,
           cpuUsage: 0, ramUsage: 0, gpuUsage: 0, cpuTemp: 0, gpuTemp: 0, latencyMs: 0, runningTasks: 0, waitingTasks: 0, diskUsage: 0, successRate: 80, batteryPercent: null, powerPluggedIn: null, uptimeHours: 0, diskReadMbps: 0, diskWriteMbps: 0, downloadMbps: 0, uploadMbps: 0,
+          gpuMemTotal: 0, gpuName: '',
           cpuScore: 0, ramScore: 0, gpuScore: 0, temperatureScore: 0, networkScore: 0, queueScore: 0, reliabilityScore: 0, diskScore: 0, finalScore: 0, averagePerformance: 0,
           status: 'offline' as const, healthStatus: 'critical', eliminated: true, eliminationReason: 'Node is offline'
         })),
@@ -371,6 +374,10 @@ export default function JobsPage() {
       setConsoleDeviceIds(targetDeviceIds);
       setActiveConsoleDeviceId(primaryDeviceId);
       setConsoleActiveTab('terminal');
+
+      // Write scheduler logs to RTDB so they appear immediately in the live console
+      // before the agent starts writing its own output lines.
+      await writeJobInitialLogs(primaryDeviceId, `job_${jobId}_${primaryDeviceId}`, consoleLogs);
 
       if (tab.parallel && targetDeviceIds.length > 1) {
         await Promise.all(targetDeviceIds.map(did => dispatchSingleDevice(tabId, jobId, did, tab.code, tab.forceWork)));
