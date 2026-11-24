@@ -11,7 +11,7 @@
 type AnyDecision = any;
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
+const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
 const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -87,7 +87,7 @@ In your selectionRationale, comparisonNarrative, and executiveSummary, make sure
 
 {
   "executiveSummary": "<2-3 sentence executive summary of what the scheduler did and why, including composite score and average performance>",
-  "selectionRationale": "<3-4 sentence detailed technical rationale for selecting ${winner.hostname}, referencing specific metric values, component scores, and the Average Performance Score compared to others>",
+  "selectionRationale": "<3-4 sentence detailed technical rationale for selecting ${winnerName}, referencing specific metric values, component scores, and the Average Performance Score compared to others>",
   "performanceInsights": "<3-4 sentences about the performance landscape across all nodes — which metrics varied most, any bottlenecks, standout observations>",
   "riskAssessment": "<2-3 sentences about risks — thermal limits, network reliability, disk capacity, queue buildup — and how close the winner is to any thresholds>",
   "recommendations": ["<actionable recommendation 1>", "<actionable recommendation 2>", "<actionable recommendation 3>"],

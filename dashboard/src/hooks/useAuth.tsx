@@ -1,53 +1,58 @@
 'use client';
 
 import { useEffect, createContext, useContext, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
-import { getUserProfile, createUserProfile } from '@/lib/db';
 import { useAppStore } from '@/store/appStore';
 import { useRouter, usePathname } from 'next/navigation';
+import type { UserProfile } from '@/types';
+
+// ── Local auth (no Firebase) ──────────────────────────────────────────────────
+// Fake user profile used when logged in locally
+function buildLocalUser(email: string): UserProfile {
+  return {
+    uid: 'local-user',
+    email,
+    displayName: email.split('@')[0],
+    role: 'developer',
+    createdAt: Date.now(),
+  };
+}
 
 interface AuthContextType {
-  user: User | null;
+  user: UserProfile | null;
   loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const setAppUser = useAppStore(s => s.setUser);
   const router = useRouter();
   const pathname = usePathname();
 
-  // 1. Subscribe to auth state changes ONCE on mount
+  // 1. On mount, check localStorage for a local auth session
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (firebaseUser) {
-          let profile = await getUserProfile(firebaseUser.uid);
-          if (!profile) {
-            await createUserProfile(firebaseUser.uid, firebaseUser.email || '');
-            profile = await getUserProfile(firebaseUser.uid);
-          }
-          setAppUser(profile);
-          setUser(firebaseUser);
-        } else {
-          setAppUser(null);
-          setUser(null);
-        }
-      } catch (err) {
-        console.error("Auth state change error:", err);
-      } finally {
-        setLoading(false);
+    try {
+      const stored = localStorage.getItem('local_auth_user');
+      if (stored) {
+        const parsed = JSON.parse(stored) as { email: string };
+        const profile = buildLocalUser(parsed.email);
+        setAppUser(profile);
+        setUser(profile);
+      } else {
+        setAppUser(null);
+        setUser(null);
       }
-    });
-
-    return () => unsubscribe();
+    } catch {
+      setAppUser(null);
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
   }, [setAppUser]);
 
-  // 2. Separate routing checks from the auth listener subscription
+  // 2. Route guard
   useEffect(() => {
     if (loading) return;
 

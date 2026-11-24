@@ -7,7 +7,7 @@ A complete production-grade distributed monitoring system is now fully deployed 
 ## 1. Web Dashboard (Next.js 16)
 - **Status:** ✅ Built & Deployed Live
 - **Hosting URL:** [https://clusteros300809.web.app](https://clusteros300809.web.app)
-- **Git Repository:** [https://github.com/Jinchuriki-7/clusteros.git](https://github.com/Jinchuriki-7/clusteros.git) (Clean push with secret scanning and binary size optimization)
+- **Git Repository:** [https://github.com/rahat300809/cluster_sheduling_AI.git](https://github.com/rahat300809/cluster_sheduling_AI.git)
 - **Deployment Details:** Deployed using Firebase Hosting. The route structure is fully compatible with static exports (`trailingSlash: true` and `/device/?id=` static route for device details).
 
 ### Pages Map

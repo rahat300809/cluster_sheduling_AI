@@ -3,8 +3,10 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+// Local auth — no Firebase needed for local dev
+const LOCAL_USERS = [
+  { email: 'rahat3008096081@gmail.com', password: '1234' },
+];
 import { Network, Cpu, Zap, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
@@ -22,43 +24,23 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
 
-    try {
-      if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-      } else {
-        await createUserWithEmailAndPassword(auth, email, password);
-      }
+    // Simulate brief loading
+    await new Promise((r) => setTimeout(r, 600));
+
+    const matched = LOCAL_USERS.find(
+      (u) => u.email === email && u.password === password
+    );
+
+    if (matched) {
+      // Store session locally
+      localStorage.setItem('local_auth_user', JSON.stringify({ email: matched.email }));
       localStorage.setItem('portal_role', portalRole);
       router.push(portalRole === 'host' ? '/rentals' : '/');
-    } catch (err: any) {
-      let msg = 'Authentication failed';
-      if (err && typeof err === 'object' && 'code' in err) {
-        switch (err.code) {
-          case 'auth/weak-password':
-            msg = 'Password must be at least 6 characters.';
-            break;
-          case 'auth/email-already-in-use':
-            msg = 'This email address is already in use.';
-            break;
-          case 'auth/invalid-email':
-            msg = 'Invalid email address format.';
-            break;
-          case 'auth/invalid-credential':
-            msg = 'Invalid email or password.';
-            break;
-          case 'auth/network-request-failed':
-            msg = 'Network error. Please check your internet connection.';
-            break;
-          default:
-            msg = err.message?.replace('Firebase: ', '').replace(/\(auth.*\)\.?/, '').trim() || 'Authentication failed';
-        }
-      } else if (err instanceof Error) {
-        msg = err.message;
-      }
-      setError(msg);
-    } finally {
-      setLoading(false);
+    } else {
+      setError('Invalid email or password.');
     }
+
+    setLoading(false);
   };
 
   return (
