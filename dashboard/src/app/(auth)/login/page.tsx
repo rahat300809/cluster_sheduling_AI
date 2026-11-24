@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 // Local auth — no Firebase needed for local dev
 const LOCAL_USERS = [
   { email: 'rahat3008096081@gmail.com', password: '1234' },
+  { email: 'rahat3008096081@gmail.com', password: '12345678' },
 ];
 import { Network, Cpu, Zap, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
 
@@ -25,19 +26,47 @@ export default function LoginPage() {
     setError('');
 
     // Simulate brief loading
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 400));
 
-    const matched = LOCAL_USERS.find(
-      (u) => u.email === email && u.password === password
-    );
+    const cleanEmail = email.trim().toLowerCase();
 
-    if (matched) {
-      // Store session locally
-      localStorage.setItem('local_auth_user', JSON.stringify({ email: matched.email }));
+    if (!cleanEmail || !password) {
+      setError('Please enter both email and password.');
+      setLoading(false);
+      return;
+    }
+
+    if (isLogin) {
+      const matched = LOCAL_USERS.find(
+        (u) => u.email.toLowerCase() === cleanEmail && u.password === password
+      );
+
+      let registeredMatched = false;
+      try {
+        const localAccounts = JSON.parse(localStorage.getItem('registered_users') || '[]');
+        registeredMatched = localAccounts.some(
+          (u: any) => u.email.toLowerCase() === cleanEmail && u.password === password
+        );
+      } catch {}
+
+      if (matched || registeredMatched) {
+        localStorage.setItem('local_auth_user', JSON.stringify({ email: cleanEmail }));
+        localStorage.setItem('portal_role', portalRole);
+        router.push(portalRole === 'host' ? '/rentals' : '/');
+      } else {
+        setError('Invalid email or password. Use: rahat3008096081@gmail.com / 1234');
+      }
+    } else {
+      // Create Account mode
+      try {
+        const localAccounts = JSON.parse(localStorage.getItem('registered_users') || '[]');
+        localAccounts.push({ email: cleanEmail, password });
+        localStorage.setItem('registered_users', JSON.stringify(localAccounts));
+      } catch {}
+
+      localStorage.setItem('local_auth_user', JSON.stringify({ email: cleanEmail }));
       localStorage.setItem('portal_role', portalRole);
       router.push(portalRole === 'host' ? '/rentals' : '/');
-    } else {
-      setError('Invalid email or password.');
     }
 
     setLoading(false);

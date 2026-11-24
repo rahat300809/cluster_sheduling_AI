@@ -21,7 +21,7 @@ import {
   Play, Loader2, Sparkles, Terminal as TerminalIcon, Code,
   History, Monitor, Cpu, ChevronRight, CheckCircle, XCircle,
   Clock, Plus, X, Network, Zap, Trash2, Users, Download, AlertTriangle,
-  Settings2, Activity, Trophy, BarChart2
+  Settings2, Activity, Trophy, BarChart2, RotateCcw, FileCode, StopCircle
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useAuth } from '@/hooks/useAuth';
@@ -54,6 +54,74 @@ for epoch in range(1, 6):
 
 print("[ClusterOS] Training complete!")
 `;
+
+const CODE_TEMPLATES = [
+  {
+    name: '🧠 ML Model Training',
+    code: DEFAULT_CODE,
+  },
+  {
+    name: '🔢 Matrix Multiplication Benchmark',
+    code: `import numpy as np
+import time
+
+print("[ClusterOS] Starting Matrix Multiplication Benchmark...")
+matrix_size = 2000
+print(f"[ClusterOS] Allocating matrices of size {matrix_size}x{matrix_size}...")
+
+start = time.time()
+A = np.random.rand(matrix_size, matrix_size)
+B = np.random.rand(matrix_size, matrix_size)
+print(f"[ClusterOS] Matrices generated in {time.time() - start:.2f}s")
+
+print("[ClusterOS] Computing dot product (A @ B)...")
+compute_start = time.time()
+C = np.dot(A, B)
+duration = time.time() - compute_start
+
+print(f"[ClusterOS] Matrix computation completed in {duration:.4f} seconds!")
+print(f"[ClusterOS] Mean result value: {np.mean(C):.4f}")
+print("[ClusterOS] Benchmark successfully completed!")
+`,
+  },
+  {
+    name: '⚡ Parallel Batch Processing',
+    code: `import time
+import math
+
+print("[ClusterOS] Initializing distributed data pipeline...")
+records = 100000
+print(f"[ClusterOS] Processing batch of {records:,} data items...")
+
+start = time.time()
+for batch in range(1, 6):
+    time.sleep(0.8)
+    processed = batch * (records // 5)
+    print(f"[ClusterOS] Batch {batch}/5 processed ({processed:,}/{records:,} records)")
+
+total_time = time.time() - start
+print(f"[ClusterOS] Pipeline completed in {total_time:.2f}s. Throughput: {records / total_time:.0f} rec/s.")
+`,
+  },
+  {
+    name: '💻 System Diagnostics & Stress Test',
+    code: `import sys
+import platform
+import time
+
+print(f"[ClusterOS] Host System: {platform.system()} {platform.release()} ({platform.machine()})")
+print(f"[ClusterOS] Python Runtime: {sys.version.split()[0]}")
+print("[ClusterOS] Running CPU & Memory stress test...")
+
+for step in range(1, 4):
+    print(f"[ClusterOS] Pass {step}/3: Testing execution units...")
+    total = sum(i ** 0.5 for i in range(1000000))
+    time.sleep(1)
+
+print("[ClusterOS] All diagnostic checks passed with 0 errors!")
+`,
+  },
+];
 
 let tabCounter = 1;
 function createTab(isInitial = false): JobTab {
@@ -154,6 +222,22 @@ export default function JobsPage() {
     setSchedulerWeights(w);
     saveWeights(w);
   }, []);
+
+  const handleStopWorkload = async () => {
+    if (!activeTabId || !runningTabs.has(activeTabId)) return;
+    if (commandUnsubsRef.current[activeTabId]) {
+      commandUnsubsRef.current[activeTabId].forEach(fn => fn());
+      commandUnsubsRef.current[activeTabId] = [];
+    }
+    setRunningTabs(prev => {
+      const s = new Set(prev);
+      s.delete(activeTabId);
+      return s;
+    });
+    if (activeConsoleJobId) {
+      await updateJobStatus(activeConsoleJobId, 'failed', 'Execution manually cancelled by user.').catch(() => {});
+    }
+  };
 
   const terminalScrollRef = useRef<HTMLDivElement>(null);
   const outputUnsubRef = useRef<(() => void) | null>(null);
@@ -596,7 +680,20 @@ export default function JobsPage() {
                 className="bg-transparent border-none outline-none font-semibold text-sm text-white focus:ring-1 focus:ring-green-500/20 rounded px-1 flex-1"
                 placeholder="Job name..."
               />
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
+                <select
+                  onChange={e => {
+                    const tmpl = CODE_TEMPLATES.find(t => t.name === e.target.value);
+                    if (tmpl) updateTab({ code: tmpl.code });
+                  }}
+                  defaultValue=""
+                  className="px-2.5 py-1.5 bg-slate-900/90 border border-slate-700 rounded-lg text-xs text-slate-300 hover:text-white focus:outline-none focus:border-green-500/50 appearance-none cursor-pointer"
+                >
+                  <option value="" disabled>Load Template...</option>
+                  {CODE_TEMPLATES.map(t => (
+                    <option key={t.name} value={t.name}>{t.name}</option>
+                  ))}
+                </select>
                 <div
                   onClick={() => updateTab({ forceWork: !activeTab.forceWork })}
                   className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-red-400/90 hover:text-red-400 transition-colors select-none"
@@ -609,14 +706,24 @@ export default function JobsPage() {
                   <AlertTriangle className="w-3.5 h-3.5" />
                   Force Work
                 </div>
-                <button
-                  onClick={handleRun}
-                  disabled={isRunning || onlineDevices.length === 0}
-                  className="flex items-center gap-2 px-4 py-1.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-bold rounded-lg text-xs transition-all uppercase tracking-wide"
-                >
-                  {isRunning ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5 fill-black" />}
-                  {isRunning ? 'Running...' : 'Run Workload'}
-                </button>
+                {isRunning ? (
+                  <button
+                    onClick={handleStopWorkload}
+                    className="flex items-center gap-2 px-3.5 py-1.5 bg-red-500/20 hover:bg-red-500/30 border border-red-500/40 text-red-400 font-bold rounded-lg text-xs transition-all uppercase tracking-wide"
+                  >
+                    <StopCircle className="w-3.5 h-3.5" />
+                    Stop Workload
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleRun}
+                    disabled={isRunning || (activeTab.mode === 'dedicated' ? !activeTab.targetDeviceId : onlineDevices.length === 0)}
+                    className="flex items-center gap-2 px-4 py-1.5 bg-green-500 hover:bg-green-400 disabled:opacity-50 disabled:cursor-not-allowed text-black font-bold rounded-lg text-xs transition-all uppercase tracking-wide"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-black" />
+                    Run Workload
+                  </button>
+                )}
               </div>
             </div>
 
@@ -677,9 +784,14 @@ export default function JobsPage() {
                   className="px-3 py-1.5 bg-slate-900/60 border border-slate-700 rounded-lg text-xs text-white focus:outline-none focus:border-blue-500/40 appearance-none"
                 >
                   <option value="">Select PC...</option>
-                  {onlineDevices.map(d => {
+                  {devices.map(d => {
+                    const isOnline = metricsMap[d.deviceId]?.status === 'online';
                     const cpu = metricsMap[d.deviceId]?.cpu?.total ?? 0;
-                    return <option key={d.deviceId} value={d.deviceId}>{d.name || d.machineName} — CPU: {Number(cpu).toFixed(0)}%</option>;
+                    return (
+                      <option key={d.deviceId} value={d.deviceId}>
+                        {d.name || d.machineName} {isOnline ? `(Online — CPU: ${Number(cpu).toFixed(0)}%)` : '(Offline)'}
+                      </option>
+                    );
                   })}
                 </select>
               )}
@@ -744,6 +856,9 @@ export default function JobsPage() {
                 <span className="text-[10px] text-slate-500 uppercase tracking-wider font-semibold">Terminal Log Output</span>
                 {activeConsoleLines.length > 0 && (
                   <div className="flex items-center gap-2">
+                    <button onClick={() => setActiveConsoleLines([])} className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-semibold transition-all">
+                      <Trash2 className="w-2.5 h-2.5" /> Clear
+                    </button>
                     <button onClick={() => downloadLogs('txt')} className="flex items-center gap-1 px-2 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-[9px] font-semibold transition-all">
                       <Download className="w-2.5 h-2.5" /> TXT
                     </button>
@@ -894,6 +1009,17 @@ export default function JobsPage() {
                       <Cpu className="w-3 h-3" />{nodeName}
                     </span>
                     <div className="flex items-center gap-2">
+                      <button
+                        onClick={e => {
+                          e.stopPropagation();
+                          updateTab({ code: job.script, name: `${job.name} (Copy)`, forceWork: job.forceWork ?? false });
+                          viewJobLogs(job);
+                        }}
+                        className="flex items-center gap-0.5 text-[9px] text-green-400 hover:text-green-300 transition-colors"
+                        title="Load script into editor"
+                      >
+                        <RotateCcw className="w-2.5 h-2.5" /> Re-run
+                      </button>
                       {job.aiReport && (
                         <button
                           onClick={e => { e.stopPropagation(); setAiReportModalJob(job); }}

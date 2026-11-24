@@ -11,7 +11,7 @@
 type AnyDecision = any;
 
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || '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';
+const GROQ_API_KEY = process.env.NEXT_PUBLIC_GROQ_API_KEY || '';
 const GROQ_MODEL   = 'llama-3.3-70b-versatile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────

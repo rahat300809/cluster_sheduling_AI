@@ -272,7 +272,7 @@ export interface Command {
 
 // ─── User & Auth Types ────────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'operator' | 'viewer';
+export type UserRole = 'admin' | 'operator' | 'viewer' | 'developer' | 'host';
 
 export interface UserProfile {
   uid: string;
