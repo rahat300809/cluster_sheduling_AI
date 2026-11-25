@@ -330,6 +330,16 @@ dotnet run
 
 ---
 
+### 4. AI Workload Studio & Execution Pipeline
+
+The dashboard features a Monaco-powered cloud IDE tailored for distributed computing workloads:
+- **Pre-configured Workload Templates**: Instant simulation presets including NumPy ML Model Training, Matrix Multiplication Benchmarks, Distributed Data Pipelines, and System Stress Tests.
+- **Dedicated & Cluster Routing**: Smart automatic routing via composite node scoring or manual assignment to dedicated online PCs.
+- **Interactive Workload Controls**: Real-time console streaming with options to clear terminal buffers, stop running workloads midway, and re-run historical jobs with one click.
+- **Automated Drop Recovery & Verification**: Fault tolerance powered by heartbeat monitoring with automatic node redispatch and synthetic anti-spoofing verification.
+
+---
+
 ## 🧪 Verification & Building
 
 To perform a complete typecheck and production build of the web dashboard:
