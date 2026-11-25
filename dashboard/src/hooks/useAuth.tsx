@@ -20,9 +20,16 @@ function buildLocalUser(email: string): UserProfile {
 interface AuthContextType {
   user: UserProfile | null;
   loading: boolean;
+  login: (email: string, portalRole?: string) => void;
+  logout: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+  login: () => {},
+  logout: () => {},
+});
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserProfile | null>(null);
@@ -52,6 +59,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [setAppUser]);
 
+  const login = (email: string, portalRole = 'developer') => {
+    const profile = buildLocalUser(email);
+    localStorage.setItem('local_auth_user', JSON.stringify({ email }));
+    localStorage.setItem('portal_role', portalRole);
+    setAppUser(profile);
+    setUser(profile);
+    const target = portalRole === 'host' ? '/rentals' : '/';
+    window.location.href = target;
+  };
+
+  const logout = () => {
+    localStorage.removeItem('local_auth_user');
+    localStorage.removeItem('portal_role');
+    setAppUser(null);
+    setUser(null);
+    window.location.href = '/login';
+  };
+
   // 2. Route guard
   useEffect(() => {
     if (loading) return;
@@ -68,7 +93,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, loading, pathname, router]);
 
   return (
-    <AuthContext.Provider value={{ user, loading }}>
+    <AuthContext.Provider value={{ user, loading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

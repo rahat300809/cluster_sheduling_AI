@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { motion, AnimatePresence } from 'framer-motion';
-import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppStore } from '@/store/appStore';
 import {
   LayoutDashboard, Monitor, Activity, Terminal, Network,
@@ -33,6 +32,7 @@ const navItems: NavItem[] = [
 export function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { logout } = useAuth();
   const { sidebarCollapsed, toggleSidebar, devices, metricsMap } = useAppStore();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [portalRole, setPortalRole] = useState<'developer' | 'host'>('developer');
@@ -280,6 +280,7 @@ function SidebarContent({
   onlineCount: number;
   isMobile?: boolean;
 }) {
+  const { logout } = useAuth();
   return (
     <>
       {/* Logo */}
@@ -395,7 +396,7 @@ function SidebarContent({
         )}
 
         <button
-          onClick={() => signOut(auth)}
+          onClick={() => logout()}
           className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-all duration-200 w-full ${collapsed ? 'justify-center' : ''}`}
         >
           <LogOut className="w-4 h-4 flex-shrink-0" />

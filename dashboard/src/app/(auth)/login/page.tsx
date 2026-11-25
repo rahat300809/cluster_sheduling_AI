@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { useAuth } from '@/hooks/useAuth';
 // Local auth — no Firebase needed for local dev
 const LOCAL_USERS = [
   { email: 'rahat3008096081@gmail.com', password: '1234' },
@@ -11,6 +12,7 @@ const LOCAL_USERS = [
 import { Network, Cpu, Zap, Lock, Mail, Eye, EyeOff, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
+  const { login } = useAuth();
   const [isLogin, setIsLogin] = useState(true);
   const [portalRole, setPortalRole] = useState<'developer' | 'host'>('developer');
   const [email, setEmail] = useState('');
@@ -50,9 +52,7 @@ export default function LoginPage() {
       } catch {}
 
       if (matched || registeredMatched) {
-        localStorage.setItem('local_auth_user', JSON.stringify({ email: cleanEmail }));
-        localStorage.setItem('portal_role', portalRole);
-        router.push(portalRole === 'host' ? '/rentals' : '/');
+        login(cleanEmail, portalRole);
       } else {
         setError('Invalid email or password. Use: rahat3008096081@gmail.com / 1234');
       }
@@ -64,9 +64,7 @@ export default function LoginPage() {
         localStorage.setItem('registered_users', JSON.stringify(localAccounts));
       } catch {}
 
-      localStorage.setItem('local_auth_user', JSON.stringify({ email: cleanEmail }));
-      localStorage.setItem('portal_role', portalRole);
-      router.push(portalRole === 'host' ? '/rentals' : '/');
+      login(cleanEmail, portalRole);
     }
 
     setLoading(false);
