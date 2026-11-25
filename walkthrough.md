@@ -20,6 +20,8 @@ A complete production-grade distributed monitoring system is now fully deployed 
 - **Clusters** (`/clusters`): Logic grouping of devices.
 - **AI Workload Studio** (`/jobs`): **[NEW]** A real-time cloud IDE featuring:
   - **Monaco Code Editor**: Full Python syntax highlighting, vscode-dark theme, and JetBrains Mono fonts.
+  - **Workload Templates**: Built-in presets for ML Training, Matrix Benchmark, Batch Processing, and Hardware Stress.
+  - **Interactive Controls**: Instant execution cancellation, terminal buffer clearing, and one-click history re-runs.
   - **Intelligent Load Balancing**: Automatically detects the most idle online PC in the cluster to route the Python script to.
   - **Live Console Streaming**: Real-time console logs stream output (including pip installer progress) directly from the executing PC.
   - **Job History**: Reload past scripts, inspect completion states, and review training console logs.
